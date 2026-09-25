@@ -913,6 +913,8 @@ Pending Operations
 Apply Journal
 
 Conflicts
+
+Initial Bootstrap State
 ```
 
 ---
@@ -1068,9 +1070,17 @@ vaultId
 serverCursor
 
 schemaVersion
+
+initialBootstrap
 ```
 
 등을 보존한다.
+
+### 36.1 Initial Bootstrap Metadata
+
+`initialBootstrap`은 [06 Data Model](./06_data-model.md)의 `policyVersion`, `vaultId`, `complete`를 보존한다. 이 metadata가 없거나 `complete = false`이면 Client는 Incremental Pull만으로 초기화를 끝내서는 안 되며 fresh Server Manifest로 Server-first Bootstrap을 다시 시작해야 한다.
+
+`complete = true`는 Pending Operation의 commit 완료가 아니라 Local 경로 분류 완료를 뜻한다. 따라서 Pending Store와 독립적으로 저장하되, 해당 `vaultId`와 함께 검증한다.
 
 ---
 
@@ -1269,6 +1279,24 @@ IndexedDB Transaction
 ```
 
 Transaction이 성공한 이후에만 해당 Operation이 Network Push 대상이 된다.
+
+### 43.1 Initial Bootstrap Classification
+
+Initial Bootstrap은 Server Manifest 통합 이후 Local Vault를 scan한다. Server가 `UNKNOWN`으로 확인한 Local 항목은 일반 Local Change와 같은 방식으로 `pending`과 필요한 `artifact`를 durable하게 기록한다. Server `PRESENT` 또는 `DELETED`와 겹치는 Local 항목은 `conflict`와 `replica`의 normal conflict transaction으로 기록한다.
+
+Vault 전체를 하나의 IndexedDB transaction에 넣을 필요는 없다. 다만 다음 순서는 지켜야 한다.
+
+```text
+각 CREATE 후보: pending + artifact durable commit
+        │
+        ▼
+모든 Local 경로가 분류됨
+        │
+        ▼
+initialBootstrap.complete = true durable commit
+```
+
+Client가 중간에 종료되면 `complete`는 false로 남는다. 다음 실행은 fresh manifest를 읽고, 이미 존재하는 Pending / Conflict를 인식하여 재사용하고 아직 분류되지 않은 항목만 처리한다. 완료 metadata를 먼저 기록하거나, Pending 없이 CREATE를 Network로 보내면 안 된다.
 
 ---
 

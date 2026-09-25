@@ -263,6 +263,21 @@ Replica / Conflict Update
 
 가 하나의 durable state transition으로 처리되는지 검증한다.
 
+## 5.3 Client Scheduler Integration
+
+실제 Obsidian lifecycle adapter와 Scheduler를 연결하여 다음을 검증한다.
+
+```text
+Local event
+    → durable Pending
+    → automatic Sync Cycle
+
+Plugin startup / foreground resume / network online / server notification
+    → at most one running Sync Cycle
+```
+
+실행 중 추가 Trigger가 생기면 follow-up cycle 하나가 예약되어야 하며, 동시 HTTP sync가 여러 개 실행되면 안 된다. 자동 Sync가 성공하거나 retryable failure가 난 결과는 상태 UI에 반영되고, `Sync now` command 없이도 Local Pending과 remote change가 수렴해야 한다.
+
 ---
 
 # 6. End-to-End Environment
@@ -791,9 +806,40 @@ Manifest 이후 Change Pull
 
 이다.
 
+
+## 13.2 Existing Local Vault Bootstrap
+
+기존 Local 파일이 있는 새 Client가 기존 Server Vault에 연결하는 경우 다음 경로별 결과를 검증한다.
+
+```text
+Server only
+    → Local에 download, upload 없음
+
+동일 path + 동일 file hash
+    → Replica만 기록, upload 없음
+
+동일 path + 다른 content 또는 type
+    → Local 보존 + durable Conflict, upload 없음
+
+Server tombstone + Local path 존재
+    → Local 보존 + durable Conflict, recreate 없음
+
+Server UNKNOWN + Local file 또는 empty directory
+    → durable CREATE 후보 + 이후 push
+```
+
+추가로 다음을 검증한다.
+
+* `.obsidian/`과 지원하지 않는 path가 scan, manifest, pending 어느 쪽에도 나타나지 않는다.
+* 제한을 넘는 Local attachment는 upload하지 않고 사용자에게 제외 상태가 보인다.
+* 하나의 경로가 Conflict여도 다른 `UNKNOWN` Local 경로의 CREATE는 계속 진행된다.
+* Bootstrap 완료 metadata는 모든 경로가 Replica, Conflict, Pending, 또는 제외 상태로 durable 분류된 뒤에만 기록된다.
+* 기존 `0.1.0` Replica의 offline MODIFY 또는 DELETE는 manifest가 동일 Base State를 보일 때 Pending으로 유지되며, 초기 import Conflict가 되지 않는다.
+* 기존 `0.1.0`의 in-flight operation은 Change Journal에 같은 Operation ID가 있으면 own commit으로 복구한 뒤 fresh manifest를 통합한다. 이후 다른 Client의 변경도 정상적으로 적용되어야 한다.
+
 ---
 
-## 13.2 Initial Sync Race
+## 13.3 Initial Bootstrap Race
 
 Manifest:
 
@@ -817,9 +863,31 @@ GET changes after 100
 
 으로 따라잡아야 한다.
 
+Manifest 이후 다른 Client가 같은 `UNKNOWN` 경로를 CREATE하는 경우도 검증한다. Initial Client의 UNKNOWN-base CREATE는 Server에서 reject되어 Create Conflict가 되어야 하며, 먼저 commit된 Server Content를 overwrite하거나 duplicate history를 만들면 안 된다.
+
 ---
 
-## 13.3 Full Reconciliation
+## 13.4 Initial Bootstrap Crash and Retry
+
+다음 중단 지점을 각각 재시작한다.
+
+```text
+Manifest 통합 전
+
+Manifest 통합 후 / Local 분류 전
+
+일부 Pending CREATE 저장 후
+
+모든 Pending 저장 후 / Bootstrap complete 저장 전
+
+Bootstrap complete 저장 후 / 첫 Push 전
+```
+
+각 재시작은 fresh manifest로 재개하고 기존 Pending / Conflict를 보존해야 한다. 같은 path의 CREATE가 중복 생성되지 않아야 하며, 완료 metadata가 없는 상태에서 Incremental Pull만 수행해서는 안 된다.
+
+---
+
+## 13.5 Full Reconciliation
 
 다음과 같은 상태를 만든다.
 

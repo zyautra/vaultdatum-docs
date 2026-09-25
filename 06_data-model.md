@@ -1320,6 +1320,42 @@ Vault ID가 바뀌면 Cursor만 유지해서는 안 된다.
 
 ---
 
+## 24.3 Initial Bootstrap State
+
+처음 Server에 연결하는 Client는 기존 Local Vault를 안전하게 분류했는지 durable하게 기억해야 한다. Client Metadata는 Vault Binding과 함께 다음 논리 상태를 가진다.
+
+```text
+initialBootstrap
+
+policyVersion
+vaultId
+complete
+```
+
+의미:
+
+```text
+complete = false 또는 metadata 없음
+    → fresh Server Manifest 기반 Initial Bootstrap 필요
+
+complete = true
+    → 일반 Incremental Sync 및 Local Reconciliation 수행 가능
+```
+
+`complete = true`는 다음을 의미한다.
+
+```text
+해당 vaultId의 fresh manifest가 통합되었고,
+모든 동기화 대상 Local 경로가 Replica, Conflict, durable Pending,
+또는 명시적 제외 상태로 분류되었다.
+```
+
+이 값은 Pending CREATE의 Server Commit 완료를 뜻하지 않는다. Pending Operation은 별도 lifecycle을 유지하며, Bootstrap이 완료된 뒤에도 retry 또는 Conflict가 될 수 있다.
+
+Client State migration에서 이 metadata가 없는 기존 Client는 `complete = false`로 취급한다. 다음 online sync에서 Server-first Bootstrap을 수행한다. Vault ID가 다르면 기존 metadata를 재사용하거나 자동 초기화하지 않고 Vault mismatch / rebootstrap 절차를 따른다.
+
+---
+
 # 25. Replica Entry
 
 Replica Index의 한 항목이다.

@@ -799,25 +799,68 @@ New Client
 
 ## 20.1 Existing Local Vault
 
-이미 파일이 존재하는 Local Vault를 새로운 VaultDatum Client로 등록하는 경우에는 자동으로 서버와 합쳐서는 안 된다.
+이미 파일이 존재하는 Local Vault를 등록할 때도 서버를 먼저 동기화한다. 다만 서버에 전혀 알려지지 않은 Local 경로는 안전한 `CREATE` 후보로 분류하여 자동으로 업로드할 수 있다. 이는 양쪽 내용을 임의로 합치는 것이 아니라, Server Manifest를 기준으로 각 경로를 명시적으로 분류하는 **안전한 초기 Bootstrap**이다.
 
-서버가 absolute source of truth이므로 기존 Local Content를 서버보다 우선할 수 없다.
-
-초기 버전에서는 다음 중 명시적인 Bootstrap 절차를 사용한다.
+초기 Bootstrap은 항상 다음 순서로 실행한다.
 
 ```text
-기존 Vault
-   │
-   ▼
-VaultDatum Server Bootstrap
-   │
-   ▼
-Other Clients
+0. 기존 Replica가 있는 Local drift만 Pending으로 복구
+   └── Server UNKNOWN 경로는 CREATE 후보로 만들지 않음
+
+1. 기존 Pending이 있으면 Change Journal로 이미 확정된 own operation을 먼저 복구
+
+2. Server Manifest snapshot 생성 및 검증
+
+3. Manifest를 Local Vault와 대조하여 적용 또는 Conflict 기록
+
+4. 최신 Local Vault를 다시 scan
+
+5. Server가 UNKNOWN인 경로만 durable CREATE 후보로 기록
+
+6. CREATE 후보 Push
+
+7. Push 이후 Change Journal을 Pull하여 수렴 확인
 ```
 
-또는 사용자가 서버 상태로 Local Sync 영역을 초기화한다.
+초기 scan이나 Local Event만을 근거로 Server `UNKNOWN` CREATE를 보내서는 안 된다. Server Manifest를 성공적으로 통합할 수 없으면 Bootstrap은 완료되지 않으며, 기존 Replica와 비교해 복구한 Pending 외의 Local Content는 upload하지 않는다.
 
-기존 Local Vault와 기존 Server Vault를 자동 Merge하는 기능은 MVP의 필수 기능으로 두지 않는다.
+이미 동기화 이력이 있는 Client는 manifest 전에 Replica Index와 일치하지 않는 Local 변경을 Pending으로 복구할 수 있다. 이는 기존 Server state를 Base로 하는 offline 변경의 복구이며, 기존 Local Vault를 import하는 동작이 아니다. 이미 저장된 Pending이 있다면 먼저 Change Journal을 처리해 동일 Operation ID의 Server commit을 복구한다. 그래야 응답을 잃은 own operation이 최신 Manifest에서 단순한 충돌로 오인되지 않는다. 이 사전 recovery 뒤에도 fresh Manifest는 반드시 통합한다. Manifest snapshot의 해당 path가 Pending의 Base State와 동일하면 Server가 변경되지 않은 것이므로 Pending을 유지한다. Base State가 다르면 Conflict로 기록한다.
+
+### 경로별 분류
+
+Bootstrap snapshot에서의 Server State와 현재 Local State를 다음처럼 처리한다.
+
+| Server State | Local State | 결과 |
+| --- | --- | --- |
+| PRESENT | 없음 | Server 내용을 Local에 적용 |
+| PRESENT file | 같은 hash의 file | Replica로 기록, upload하지 않음 |
+| PRESENT directory | directory 존재 | Replica로 기록, upload하지 않음 |
+| PRESENT | 내용·타입이 다름 | Conflict. 어느 쪽도 덮어쓰지 않음 |
+| DELETED | 없음 | 삭제 Replica로 기록 |
+| DELETED | file 또는 directory 존재 | Conflict. 오래된 Local 항목을 자동 복원하지 않음 |
+| UNKNOWN | file 존재 | `CREATE` 후보로 durable queue |
+| UNKNOWN | 빈 directory 존재 | directory `CREATE` 후보로 durable queue |
+
+비어 있지 않은 Local directory는 그 자체의 directory CREATE가 아니라 포함된 파일과 빈 하위 directory의 후보를 통해 서버 구조에 반영된다. `.obsidian/`, 지원하지 않는 경로, 동기화 크기 제한을 넘는 파일은 후보에서 제외하고 사용자에게 상태를 보여준다.
+
+`UNKNOWN`은 해당 경로가 Server에 존재한 기록이 없다는 의미이고, `DELETED`와 다르다. 따라서 Server가 삭제한 경로를 Local에 가지고 있다는 이유만으로 초기 Bootstrap에서 되살릴 수 없다.
+
+### Bootstrap race와 재시도
+
+Manifest snapshot 이후 다른 Client가 같은 `UNKNOWN` 경로를 생성할 수 있다. Initial CREATE는 `UNKNOWN` Base Condition을 사용하고 Server가 현재 Path State를 다시 검증한다. 이 검증이 실패하면 Client는 Server 내용을 덮어쓰지 않고 Create Conflict로 기록한다.
+
+Bootstrap 도중 Client가 종료되거나 네트워크가 끊겨도, 이미 기록한 Pending Operation은 유지한다. Bootstrap 완료 metadata가 durable하게 기록되기 전에는 다음 실행에서 새 Manifest로 다시 분류한다. 재실행은 기존 Pending Operation을 재사용하거나 아직 기록되지 않은 후보만 추가해야 하며, 중복된 CREATE를 만들면 안 된다.
+
+Bootstrap 완료는 다음 조건이 모두 만족된 뒤에만 기록한다.
+
+```text
+fresh Server Manifest integrated
+AND
+every in-scope Local path classified as
+  Replica / Conflict / durable Pending / explicitly skipped
+```
+
+Pending CREATE가 아직 Server에 commit되지 않았더라도 Bootstrap 분류 자체는 완료될 수 있다. Commit과 최종 수렴은 이후 일반 Sync Cycle이 담당한다.
 
 ---
 
@@ -1037,6 +1080,10 @@ Push 성공으로 받은 Revision만으로 Global Server Cursor를 앞으로 이
 ## Protocol Invariant 12 — Local Configuration Isolation
 
 `.obsidian/`은 Sync Protocol의 모든 Scan, Manifest, Change, Replica Index 및 Reconciliation에서 제외한다.
+
+## Protocol Invariant 13 — Initial Bootstrap Is Server-First
+
+기존 Local Vault를 등록할 때도 Server Manifest를 먼저 통합한다. Server가 `UNKNOWN`으로 확인한 경로만 CREATE 후보가 될 수 있으며, `DELETED` 경로는 Local 존재만으로 복원되지 않는다.
 
 ---
 

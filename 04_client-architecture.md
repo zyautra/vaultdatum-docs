@@ -472,20 +472,21 @@ Client 시작 절차는 다음 순서를 기본으로 한다.
 
 4. Pending / Conflict State 복구
 
-5. Local Reconciliation
+5. Sync Scheduler 시작
 
-6. Buffered Event 처리
+6. Initial Bootstrap이 미완료인 경우
+   └── Server Manifest 통합 → Local 분류 → CREATE 후보 durable queue
 
-7. Sync Scheduler 시작
+7. Local Reconciliation
 
-8. Server Reconciliation
+8. Buffered Event 재평가
 
 9. Normal Operation
 ```
 
 초기화 중 발생하는 Vault Event를 잃지 않도록 Listener를 먼저 등록하고 Buffer한다.
 
-Local Reconciliation이 완료된 후 Buffered Event를 다시 평가한다.
+Bootstrap이 미완료인 Client는 Server `UNKNOWN` Local 경로를 Local scan이나 buffered event만으로 CREATE하지 않는다. 다만 기존 Replica와 비교해 발견한 Local drift는 offline Pending으로 먼저 durable하게 복구할 수 있다. 기존 Pending이 있으면 Change Journal에서 own operation recovery를 먼저 수행하고, 이어서 fresh Server Manifest를 통합하여 path별 Server State를 확정한 후 `UNKNOWN` Local 경로를 분류한다. Bootstrap 완료 Client는 일반 Local Reconciliation을 수행한 뒤 Buffered Event를 다시 평가한다.
 
 ---
 
@@ -522,6 +523,28 @@ Sync Scheduler
      ▼
 Single Logical Sync Cycle
 ```
+
+Local create, modify, delete, rename 이벤트는 Pending Operation을 durable하게 기록한 뒤 자동으로 Scheduler를 깨워야 한다. 따라서 사용자가 **Sync now**를 누르는 것은 정상 동기화의 전제 조건이 아니라, 즉시 재시도를 원하는 경우의 수동 Trigger다.
+
+Scheduler는 최소 다음 상태를 구분한다.
+
+```text
+IDLE
+  │ trigger
+  ▼
+SCHEDULED
+  │
+  ▼
+RUNNING ── trigger during run ──► RUNNING + FOLLOW_UP flag
+  │
+  ├── retryable failure ──► RETRY_WAIT
+  │
+  └── completed ──► IDLE 또는 SCHEDULED (FOLLOW_UP)
+```
+
+실행 중 새 Trigger가 생기면 별도 병렬 Sync를 시작하지 않고, 현재 Cycle 종료 후 한 번 더 실행한다. retry timer는 foreground에서 실행 중인 Client를 위한 최적화일 뿐이며, background 실행이나 영구적인 WebSocket 연결을 전제로 하지 않는다.
+
+Client는 상태 표시를 통해 자동 동기화가 실제로 수행되었는지 알 수 있어야 한다. 최소한 `Syncing`, `Up to date`, `Pending`, `Offline`, `Conflict`, `Error`와 마지막 성공 시각을 제공한다. 자동 실행 실패는 상태에 남기고, 사용자 조치가 필요한 Conflict와 지속 Error만 눈에 띄게 알린다.
 
 ---
 
@@ -991,7 +1014,7 @@ Full Hash 계산 비용이 큰 경우 mtime/size 등을 이용해 Hash가 필요
 
 새 Client는 Server를 Source of Truth로 사용한다.
 
-기본적인 신규 Client 초기화는:
+빈 Local Vault의 기본 초기화는:
 
 ```text
 Server Manifest
@@ -1008,7 +1031,21 @@ Local Synchronized Content
 
 ## 31. Initial Sync와 기존 Local Content
 
-처음 등록되는 Client의 기존 Local Content 처리 규칙은 [02 Synchronization Protocol](./02_synchronization-protocol.md)을 따른다. Server를 source of truth로 사용하며, 첫 연결만으로 Local Vault와 Server Vault를 자동 병합하거나 Local Content를 자동 upload하지 않는다.
+처음 등록되는 Client의 기존 Local Content 처리 규칙은 [02 Synchronization Protocol](./02_synchronization-protocol.md)의 안전한 Initial Bootstrap을 따른다. Server Manifest를 먼저 통합한 뒤, Server가 `UNKNOWN`으로 확인한 Local 경로만 CREATE 후보로 만든다. 동일 경로의 Server PRESENT, Server DELETED, 타입 불일치는 모두 Conflict로 보존하며 자동 upload 또는 overwrite하지 않는다.
+
+Initial Bootstrap은 다음 상태로 재개 가능해야 한다.
+
+```text
+BOOTSTRAP_REQUIRED
+        │ fresh manifest integrated
+        ▼
+CLASSIFYING_LOCAL_STATE
+        │ every path durably classified
+        ▼
+BOOTSTRAP_COMPLETE
+```
+
+Client 종료, network failure, 또는 manifest 만료가 발생하면 `BOOTSTRAP_COMPLETE`를 기록하지 않는다. 다음 실행은 새 manifest로 처음 두 단계를 다시 수행한다. 이미 durable한 Pending과 Conflict는 유지하고 중복 생성하지 않는다.
 
 ---
 
