@@ -33,7 +33,9 @@ Clear Server / This device / Merged result hierarchy
 
 Responsive Desktop and Mobile layouts
 
-Explicit actions for choosing the initial result content
+Color-coded, line-by-line two-way comparison
+
+Explicit per-change actions for choosing Server or This device content
 
 Read-only source views and an editable result view
 
@@ -43,9 +45,9 @@ Save progress and failure feedback
 Out of scope:
 
 ```text
-Automatic merge or last-write-wins behavior
+Automatic three-way merge or last-write-wins behavior
 
-IDE-grade inline conflict markers or a syntax-aware merge engine
+Syntax-aware merge, Markdown rendering, or executable content in the diff
 
 Protocol, Server API, or persistence-format changes
 
@@ -60,8 +62,9 @@ result is accepted as a new change.
 
 ### 3.1 Desktop
 
-Desktop shows the two immutable sources side by side, followed by a distinct
-result section.
+Desktop shows a two-way line diff of the immutable sources, followed by a
+distinct result section. A changed hunk is a contiguous insert, delete, or
+replacement between the two versions; unchanged lines provide context.
 
 ```text
 Resolve conflict
@@ -69,9 +72,10 @@ notes/meeting.md
 
 ┌────────────────────────┬────────────────────────┐
 │ Server version         │ This device's version  │
-│ read-only source       │ read-only source       │
+│ 12 - removed line      │ 12 + replacement line │
+│ 13   unchanged line    │ 13   unchanged line   │
 │                        │                        │
-│ [Use as result]        │ [Use as result]        │
+│ [Use Server]           │ [Use this device]     │
 └────────────────────────┴────────────────────────┘
 
 Merged result
@@ -80,43 +84,73 @@ editable text area
 [Cancel]                                  [Save merged result]
 ```
 
-The source panes use equal visual weight, readable line spacing, a bounded
-height, and independent scrolling. They must not be editable. The result pane
-is visually separated and larger than either source pane.
+Server-only and device-only lines use distinct colors and `-` / `+` markers;
+the labels and markers remain the primary distinction, so the comparison does
+not depend on color alone. Each source displays its own line numbers. The
+source panes use equal visual weight, readable line spacing, a bounded height,
+and independent scrolling. They must not be editable. The result pane is
+visually separated and larger than either source pane.
 
 ### 3.2 Mobile
 
-Mobile must not squeeze three text areas into a narrow vertical stack. It shows
-one source at a time using accessible tabs or a segmented control:
+Mobile must not squeeze a two-column diff into a narrow viewport. It shows the
+comparison and result through accessible tabs or a segmented control:
 
 ```text
-[Server] [This device] [Merged result]
+[Changes] [Merged result]
 
-active source or editable result
+Server version
+- removed line
+
+This device's version
++ replacement line
 
 [Use Server as result] / [Use this device as result]
 
 [Save merged result]
 ```
 
-Switching sources never discards unsaved result text. The save action remains
-reachable without requiring a desktop-only keyboard shortcut.
+The comparison keeps both labels and all source text visible for each changed
+hunk. Switching tabs never discards unsaved result text. The save action
+remains reachable without requiring a desktop-only keyboard shortcut.
 
-## 4. Result initialization and editing
+## 4. Line-by-line decisions
 
-The initial result starts with this device’s version, but the UI says so
-explicitly: `Result starts with this device's version.` A user may replace it
-with the Server or device source using an explicit `Use as result` action.
+The initial result starts with this device's version. Equivalently, every
+changed hunk initially selects `Use this device`; the workspace says so
+explicitly: `Result starts with this device's version.`
 
-Replacing the result requires confirmation only when the result has been edited
-since its last source selection. The confirmation makes clear that it replaces
-only the unsaved result text, not either source or the Server Vault.
+For every changed hunk, a user can select either:
+
+```text
+Use Server
+
+Use this device
+```
+
+Selecting a hunk replaces only that hunk in the generated result. It never
+changes either immutable source or the Server Vault. A user can select any
+combination of hunks, then continue editing the result as plain text.
+
+This is a two-way decision aid, not an automatic merge. There is no hidden base
+version, automatic choice, or last-write-wins rule. Where the same line was
+changed differently, the user explicitly chooses one side or writes a combined
+result.
+
+When the user edits the result directly, it becomes a custom unsaved result.
+Choosing another hunk after that requires confirmation because the result will
+be rebuilt from the current hunk choices. The confirmation states that only the
+unsaved result text changes; neither source nor the Server changes. Choosing an
+entire source as the result follows the same confirmation rule and changes all
+hunk choices to that source.
+
+## 5. Result initialization and editing
 
 The editor is plain text. It must preserve line endings and content exactly as
 entered by the user. No Markdown preview is shown in this workflow, because a
 preview could obscure source text or execute unwanted rendering behavior.
 
-## 5. Save lifecycle and safety
+## 6. Save lifecycle and safety
 
 `Save merged result` means: record the user’s result durably, apply it to the
 local replica, and queue a normal base-validated change. It does not claim that
@@ -137,24 +171,27 @@ The existing durable manual-merge artifact remains the source of restart
 recovery. Closing the modal before saving does not resolve the conflict and
 does not alter either source.
 
-## 6. Accessibility and privacy
+## 7. Accessibility and privacy
 
 - Source labels identify `Server version` and `This device's version` in text;
   color alone is never the distinction.
-- Tabs, source actions, editor, and save/cancel controls are keyboard and touch
+- Changed lines include `+` / `-` markers and source-specific line numbers.
+- Tabs, hunk actions, editor, and save/cancel controls are keyboard and touch
   accessible.
 - Long paths wrap or truncate safely with an accessible full value.
 - The workspace shows note content only because the user explicitly opened a
   specific conflict. It never copies content into notices, logs, or diagnostic
   output.
 
-## 7. Acceptance scenarios
+## 8. Acceptance scenarios
 
-| Scenario                              | Expected result                                                                                     |
-| ------------------------------------- | --------------------------------------------------------------------------------------------------- |
-| Desktop Markdown conflict             | Server and device sources are comparable side by side; the result is visibly editable and distinct. |
-| Mobile Markdown conflict              | A user can inspect both sources, edit the result, and save without horizontal overflow.             |
-| Select Server as result after editing | The user receives an unsaved-result replacement confirmation; neither source is changed.            |
-| Save succeeds                         | The result is durably queued, not falsely reported as already accepted by the Server.               |
-| Save fails or the app stops           | The durable resolution behavior from 0.3.0 preserves the user-created result for recovery.          |
-| Non-Markdown or binary conflict       | Manual Merge remains unavailable; only state-appropriate non-text resolution actions are offered.   |
+| Scenario                                 | Expected result                                                                                              |
+| ---------------------------------------- | ------------------------------------------------------------------------------------------------------------ |
+| Desktop Markdown conflict                | Color-coded Server and device lines are comparable side by side; the result is visibly editable and distinct. |
+| Mobile Markdown conflict                 | A user can inspect both sides of each changed hunk, edit the result, and save without horizontal overflow.  |
+| Select one changed hunk                  | Only that hunk changes in the generated result; neither source is changed.                                  |
+| Select a hunk after manual result edits  | The user receives a replacement confirmation; neither source is changed.                                   |
+| Select Server as result after editing    | The user receives the same replacement confirmation; neither source is changed.                             |
+| Save succeeds                            | The result is durably queued, not falsely reported as already accepted by the Server.                        |
+| Save fails or the app stops              | The durable resolution behavior from 0.3.0 preserves the user-created result for recovery.                   |
+| Non-Markdown or binary conflict          | Manual Merge remains unavailable; only state-appropriate non-text resolution actions are offered.            |
