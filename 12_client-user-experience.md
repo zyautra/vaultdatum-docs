@@ -1,7 +1,8 @@
 # VaultDatum Client User Experience
 
-> 상태: `0.3.0`을 위한 설계 초안. 이 문서는 Obsidian Client가 사용자에게
-> 동기화 상태와 복구 동작을 어떻게 보여 주는지를 정의한다.
+> 상태: `0.3.0`을 위한 설계 초안이며, `0.3.1`의 Markdown 수동 병합 작업 공간을
+> 포함한다. 이 문서는 Obsidian Client가 사용자에게 동기화 상태와 복구 동작을
+> 어떻게 보여 주는지를 정의한다.
 
 ## 1. 문서 목적
 
@@ -509,6 +510,155 @@ last write wins
 
 사용자가 conflict Action을 선택한 직후에도 "해결됨"이라고 표시해서는 안 된다.
 새 operation이 Server에 commit되고 Client가 다시 수렴한 뒤에만 완료로 표시한다.
+
+### 9.1 Markdown 수동 병합 작업 공간
+
+수동 병합은 conflict를 감추거나 자동으로 해결하는 기능이 아니다. Server와 이
+기기의 내용을 보존한 채, 사용자가 새 결과를 만들 수 있게 하는 비교·편집
+작업 공간이다. conflict 판정, durable resolution, Server commit의 의미는 계속
+[05 Conflict Resolution](./05_conflict-resolution.md)을 따른다.
+
+`0.3.0`의 단순한 세 텍스트 영역은 두 내용을 안전하게 보였지만 비교하기에는
+불편했다. `0.3.1`은 사용자가 다음 세 가지를 바로 알 수 있게 한다.
+
+```text
+Server 버전에 무엇이 있었는가?
+
+이 기기 버전에 무엇이 있었는가?
+
+어떤 내용이 새 결과로 저장되는가?
+```
+
+이 작업 공간은 자동 3-way merge, last-write-wins, protocol·Server API·persistence
+형식 변경을 도입하지 않는다. Markdown 렌더링이나 실행 가능한 embed도 병합
+화면에서 실행하지 않는다.
+
+#### Desktop 비교 화면
+
+모달 제목은 `Resolve conflict`이고, 그 아래에 영향받은 경로를 표시한다. Server
+버전은 새 변경이 받아들여질 때까지 authoritative state라는 점을 설명한다.
+
+Desktop에서는 두 읽기 전용 버전을 줄 단위로 나란히 비교하고, 그 아래에 별도의
+편집 가능한 결과를 둔다.
+
+```text
+Resolve conflict
+notes/meeting.md
+
+┌────────────────────────┬────────────────────────┐
+│ Server version         │ This device's version  │
+│ 12 - 삭제된 줄         │ 12 + 대체된 줄         │
+│ 13   공통 줄           │ 13   공통 줄           │
+│                        │                        │
+│ [Use Server]           │ [Use this device]     │
+└────────────────────────┴────────────────────────┘
+
+Merged result
+편집 가능한 텍스트 영역
+
+[Cancel]                                  [Save merged result]
+```
+
+연속된 삽입·삭제·교체는 하나의 변경 묶음(hunk)이다. Server 전용 줄과 이 기기
+전용 줄은 서로 다른 색, `-` / `+` 표식, 각 버전의 줄 번호를 함께 사용해
+표시한다. 따라서 색을 구분하지 못해도 의미를 알 수 있다. 긴 줄은 비교 의미가
+흐려지지 않도록 줄바꿈하지 않고 가로로 스크롤한다.
+
+#### Mobile 비교 화면
+
+Mobile은 두 열을 무리하게 좁히지 않는다. 비교와 결과를 접근 가능한 탭 또는
+segmented control로 전환한다.
+
+```text
+[Changes] [Merged result]
+
+Server version
+- 삭제된 줄
+
+This device's version
++ 대체된 줄
+
+[Use Server] [Use this device]
+
+[Save merged result]
+```
+
+변경 묶음에서는 양쪽 레이블과 내용을 모두 보이며, 탭을 옮겨도 아직 저장하지
+않은 결과 텍스트를 버리지 않는다. 저장 Action은 desktop 전용 단축키 없이
+터치로도 실행할 수 있어야 한다.
+
+#### 줄 단위 선택과 결과 편집
+
+초기 결과는 이 기기 버전으로 시작한다. 이는 모든 변경 묶음이 처음에는
+`Use this device`로 선택된 것과 같다. 화면은 `Result starts with this device's
+version.`처럼 그 사실을 명시한다.
+
+각 변경 묶음에서 사용자는 다음 중 하나를 선택한다.
+
+```text
+Use Server
+
+Use this device
+```
+
+선택은 그 변경 묶음만 결과에 반영하며, 어느 읽기 전용 원본이나 Server Vault를
+바꾸지 않는다. 서로 다른 변경 묶음은 서로 다른 쪽을 선택할 수 있고, 결과는
+그 뒤에도 일반 텍스트로 직접 편집할 수 있다.
+
+이것은 두 버전을 비교해 사용자가 결정하도록 돕는 기능이지, 숨겨진 base version을
+이용한 자동 병합이 아니다. 같은 줄을 양쪽에서 다르게 고쳤다면 사용자가 한쪽을
+선택하거나 직접 조합해야 한다.
+
+사용자가 결과를 직접 편집하면 결과는 custom unsaved result가 된다. 이 상태에서
+다른 변경 묶음이나 전체 Server/이 기기 버전을 선택하려면 확인을 요구한다. 확인은
+현재 결과가 선택된 변경 묶음으로 다시 구성되며, 바뀌는 것은 저장 전 결과뿐이고
+원본과 Server는 바뀌지 않는다고 설명한다.
+
+Client는 큰 노트에서 비교 계산 때문에 mobile 앱이 멈추지 않도록 작업량을
+제한한다. 안전하게 줄 단위로 나눌 수 없으면 그 사실을 표시하고 양쪽의 전체
+문서 선택과 결과 편집만 제공한다. 불완전한 줄 diff를 완전한 것처럼 표시해서는
+안 된다.
+
+결과 편집기는 plain text다. Markdown preview를 병합 화면에 표시하지 않으며,
+입력한 내용과 줄 바꿈을 임의로 변환하지 않는다.
+
+#### 저장, 접근성, 개인정보
+
+`Save merged result`는 사용자가 작성한 결과를 durable하게 기록하고 Local
+replica에 적용한 뒤, 최신 Server 상태를 base로 하는 정상 MODIFY operation을
+queue한다는 뜻이다. Server가 이미 받아들였다는 뜻은 아니다.
+
+저장 중에는 다음처럼 중복 Action을 막는다.
+
+```text
+Save merged result → Saving… (disabled)
+```
+
+성공하면 결과가 동기화 대기열에 들어갔음을 알리고 Conflict Center에서 열었다면
+남은 conflict 목록으로 돌아간다. 실패하면 modal과 편집한 결과를 유지하고,
+어느 원본도 버려지지 않았음을 설명한다. 저장 전에 modal을 닫아도 conflict나
+원본은 바뀌지 않는다. 기존 durable manual-merge artifact는 앱 종료·재시작의
+복구 기준으로 계속 사용한다.
+
+- `Server version`, `This device's version`, `+` / `-`, 줄 번호를 텍스트로 함께
+  표시한다. 색만으로 상태를 구분하지 않는다.
+- 탭, 변경 묶음 Action, 편집기, 저장·취소 Action은 키보드와 터치로 사용할 수
+  있어야 한다.
+- 긴 경로는 안전하게 줄바꿈하거나 생략하고, 접근 가능한 전체 값을 제공한다.
+- note 내용은 사용자가 특정 conflict를 열었을 때에만 표시한다. notice, log,
+  diagnostic에는 note 내용이나 credential을 넣지 않는다.
+
+다음 시나리오를 검증한다.
+
+| 시나리오 | 기대 결과 |
+| --- | --- |
+| Desktop Markdown conflict | 색·표식·줄 번호가 있는 양쪽 비교와 별도 결과 편집기가 보인다. |
+| Mobile Markdown conflict | 각 변경 묶음의 양쪽 내용을 보고 결과를 편집·저장할 수 있으며 가로 overflow가 없다. |
+| 한 변경 묶음 선택 | 해당 묶음만 생성된 결과에 반영되고 원본은 바뀌지 않는다. |
+| 직접 편집 후 묶음 선택 | 결과 재구성 전에 확인하며 원본은 바뀌지 않는다. |
+| 저장 성공 | 결과를 Server 확정으로 잘못 표시하지 않고 durable queue에 넣는다. |
+| 저장 실패 또는 앱 종료 | `0.3.0`의 durable resolution 규칙으로 결과를 복구할 수 있다. |
+| Markdown 이외 또는 binary conflict | 수동 병합을 제공하지 않고 상태에 맞는 해소 Action만 제공한다. |
 
 ---
 
