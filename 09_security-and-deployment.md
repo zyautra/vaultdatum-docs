@@ -464,6 +464,103 @@ replicas = 1
 
 ---
 
+## 21.1 Runtime Identity와 Host-backed Volume
+
+Server Process는 root가 아닌 User로 실행한다. 그러나 Container의 numeric UID/GID는
+hostPath, local volume, bind mount를 사용할 때 Host의 같은 numeric identity로
+그대로 보인다.
+
+```text
+Container UID 1001
+        ↓
+Host UID 1001
+        ↓
+Host의 /etc/passwd에 등록된 계정 이름
+```
+
+따라서 Image 안의 일반적인 non-root fallback UID를 Host의 특정 사용자 계정이라고
+가정해서는 안 된다. 어떤 Host에서는 같은 UID가 개인 사용자 또는 전혀 다른 서비스
+계정에 대응할 수 있다.
+
+### 공용 배포 설정의 경계
+
+공개된 Container Image와 Kubernetes base는 non-root 실행을 요구할 수 있지만, 다음
+설치별 값을 고정해서는 안 된다.
+
+```text
+runAsUser
+
+runAsGroup
+
+fsGroup
+
+hostPath
+
+Host user name
+
+Host node name
+```
+
+특히 `fsGroup`은 group 접근을 조정할 뿐 파일 owner를 원하는 Host 계정으로 바꾸지
+않는다. Server가 content와 staging file을 owner-only로 생성할 수 있으므로, Host
+파일 owner를 정하는 문제의 대체 수단도 아니다.
+
+### 설치별 전용 Service Account
+
+host-backed storage를 쓰는 운영자는 Host에 VaultDatum 전용 service account를
+만들고, 해당 UID/GID를 비공개 deployment overlay 또는 접근 제어된 deployment
+repository에서 선택한다. 개인 login 계정이나 다른 Application 계정을 재사용하지
+않는다.
+
+```text
+Host service account: vaultdatum
+        ↓
+Host Vault directory owner: vaultdatum:vaultdatum
+        ↓
+Pod runAsUser/runAsGroup: vaultdatum UID/GID
+        ↓
+Server-created files: vaultdatum:vaultdatum
+```
+
+Pod security context의 `runAsUser`, `runAsGroup`, 필요할 때의 `fsGroup`은 같은
+설치별 identity와 일치해야 한다. 해당 값을 담은 overlay, Host 경로, 실제 UID/GID,
+node selector는 public source repository에 넣지 않는다.
+
+### Volume 준비와 Migration
+
+새 Volume은 Pod를 시작하기 전에 운영자가 전용 account owner로 준비한다. 일반
+runtime Pod가 root init container로 매 startup마다 `/data` 전체를 재귀 `chown`하지
+않는다. 이렇게 하면 기존 Vault의 owner를 예기치 않게 바꾸지 않고 runtime 권한도
+최소화할 수 있다.
+
+기존 Volume을 전용 identity로 옮길 때는 다음 순서를 따른다.
+
+```text
+1. Server를 중지하여 단일 writer를 보장한다.
+2. /data 전체와 SQLite WAL을 crash-consistent 방식으로 backup한다.
+3. 운영자가 Host에서 전용 account owner와 필요한 directory mode를 설정한다.
+4. private overlay의 Pod identity를 같은 UID/GID로 설정한다.
+5. Pod를 시작하고 /health/ready, SQLite open, Vault read/write를 확인한다.
+```
+
+Server가 생성한 Vault content는 기본적으로 service account만 읽을 수 있는 mode를
+유지할 수 있다. Host 관리자가 내용을 읽어야 하면 root 권한 또는 명시적으로 부여한
+운영 권한을 사용하며, 편의를 위해 모든 Host 사용자에게 읽기 권한을 주지 않는다.
+
+검증은 적어도 다음을 포함한다.
+
+```text
+Pod process UID/GID = private overlay의 설정값
+
+새 Vault file owner = 전용 Host service account
+
+허가되지 않은 Host login account는 Vault content를 읽지 못함
+
+Pod 재시작 뒤에도 owner와 /data 내용이 유지됨
+```
+
+---
+
 # 22. Single Writer
 
 하나의 Vault에는 하나의 Server Instance만 Write해야 한다.
@@ -647,6 +744,15 @@ Server는 Upload Content의 Hash와 Size를 직접 검증한다.
 ## Invariant 8 — Persistent Data Outlives Container
 
 Container 또는 Pod 교체로 Vault와 Sync Metadata가 삭제되어서는 안 된다.
+
+---
+
+## Invariant 9 — Host-backed Storage Uses an Installation-specific Service Identity
+
+hostPath, local volume, bind mount의 `/data` owner는 공용 Image의 fallback UID가
+아니라 설치별 전용 service account여야 한다. Pod runtime identity와 Volume
+provisioning identity는 일치하며, 개인 Host 계정이나 해당 설치의 numeric UID/GID는
+공용 배포 설정에 기록하지 않는다.
 
 ---
 
