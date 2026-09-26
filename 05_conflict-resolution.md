@@ -519,6 +519,11 @@ Server = D
 
 # 8. Manual Merge UX
 
+`0.3.1`의 responsive Manual Merge workspace 설계는
+[13 Manual Merge User Experience](./13_manual-merge-user-experience.md)를
+따른다. 이 절은 Manual Merge가 지켜야 할 conflict와 durable resolution 의미를
+계속 정의한다.
+
 Markdown Conflict의 Manual Merge에서는 최소 다음 정보를 제공하는 것이 좋다.
 
 ```text
