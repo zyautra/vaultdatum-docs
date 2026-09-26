@@ -484,8 +484,8 @@ Host의 /etc/passwd에 등록된 계정 이름
 
 ### 공용 배포 설정의 경계
 
-공개된 Container Image와 Kubernetes base는 non-root 실행을 요구할 수 있지만, 다음
-설치별 값을 고정해서는 안 된다.
+공개된 Container Image와 Kubernetes base는 Server container의 non-root 실행을
+요구할 수 있지만, 다음 설치별 runtime 값을 고정해서는 안 된다.
 
 ```text
 runAsUser
@@ -500,6 +500,10 @@ Host user name
 
 Host node name
 ```
+
+공용 base가 writable `/tmp` 같은 ephemeral volume을 준비하기 위해 제한된 root init
+container를 쓰는 것은 가능하다. 단, 이 helper는 persistent `/data`를 mount하거나
+owner를 바꾸지 않으며 Server runtime identity를 정하지 않는다.
 
 특히 `fsGroup`은 group 접근을 조정할 뿐 파일 owner를 원하는 Host 계정으로 바꾸지
 않는다. Server가 content와 staging file을 owner-only로 생성할 수 있으므로, Host
