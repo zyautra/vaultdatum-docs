@@ -87,9 +87,10 @@ editable text area
 Server-only and device-only lines use distinct colors and `-` / `+` markers;
 the labels and markers remain the primary distinction, so the comparison does
 not depend on color alone. Each source displays its own line numbers. The
-source panes use equal visual weight, readable line spacing, a bounded height,
-and independent scrolling. They must not be editable. The result pane is
-visually separated and larger than either source pane.
+source columns use equal visual weight and readable line spacing. Long source
+lines scroll horizontally rather than reflowing into an ambiguous comparison.
+They must not be editable. The result pane is visually separated and larger
+than either source column.
 
 ### 3.2 Mobile
 
@@ -136,6 +137,12 @@ This is a two-way decision aid, not an automatic merge. There is no hidden base
 version, automatic choice, or last-write-wins rule. Where the same line was
 changed differently, the user explicitly chooses one side or writes a combined
 result.
+
+The client bounds comparison work so a very large, completely divergent note
+does not freeze a mobile device. If it cannot safely split that note into line
+hunks, the workspace explains the limit and presents one whole-document choice
+for each side plus the editable result. It never presents an incomplete line
+diff as if it were complete.
 
 When the user edits the result directly, it becomes a custom unsaved result.
 Choosing another hunk after that requires confirmation because the result will
