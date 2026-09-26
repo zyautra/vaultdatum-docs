@@ -2,13 +2,14 @@
 
 > 이 문서는 제품 요구사항과 전역 불변조건의 기준 문서다. 구현·프로토콜·저장소·운영의 세부 규칙은 아래 전문 문서에서만 정의하며, 이 문서에 같은 규칙을 다시 쓰지 않는다.
 
-| 관심사 | 기준 문서 |
-| --- | --- |
-| 상위 시스템 구조 | [01 Architecture Overview](./01_architecture-overview.md) |
-| 동기화 동작 | [02 Synchronization Protocol](./02_synchronization-protocol.md) |
-| Server / Client 내부 구조 | [03 Server Architecture](./03_server-architecture.md), [04 Client Architecture](./04_client-architecture.md) |
-| Conflict UX, 논리 상태, HTTP 계약 | [05 Conflict Resolution](./05_conflict-resolution.md), [06 Data Model](./06_data-model.md), [07 API Specification](./07_api-specification.md) |
-| 영속성, 배포 보안, 검증, 운영 | [08 Persistence Design](./08_persistence-design.md), [09 Security and Deployment](./09_security-and-deployment.md), [10 Testing Strategy](./10_testing-strategy.md), [11 Observability and Operations](./11_observability-and-operations.md) |
+| 관심사                                            | 기준 문서                                                                                                                                                                                                                                    |
+| ------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 상위 시스템 구조                                  | [01 Architecture Overview](./01_architecture-overview.md)                                                                                                                                                                                    |
+| 동기화 동작                                       | [02 Synchronization Protocol](./02_synchronization-protocol.md)                                                                                                                                                                              |
+| Server / Client 내부 구조                         | [03 Server Architecture](./03_server-architecture.md), [04 Client Architecture](./04_client-architecture.md)                                                                                                                                 |
+| Conflict UX, 논리 상태, HTTP 계약                 | [05 Conflict Resolution](./05_conflict-resolution.md), [06 Data Model](./06_data-model.md), [07 API Specification](./07_api-specification.md)                                                                                                |
+| Client 설정, 상태 표시, 첫 동기화, 사용자 복구 UX | [12 Client User Experience](./12_client-user-experience.md)                                                                                                                                                                                  |
+| 영속성, 배포 보안, 검증, 운영                     | [08 Persistence Design](./08_persistence-design.md), [09 Security and Deployment](./09_security-and-deployment.md), [10 Testing Strategy](./10_testing-strategy.md), [11 Observability and Operations](./11_observability-and-operations.md) |
 
 ## 1. 제품 개요
 
@@ -30,13 +31,13 @@ VaultDatum는 홈서버에 위치한 Vault를 모든 장치가 공유하는 **�
 
 VaultDatum의 목적은 원격 파일시스템을 제공하는 것이 아니라 다음을 보장하는 것이다.
 
-* 각 장치에서는 항상 로컬 Vault를 사용한다.
-* 서버 Vault가 전체 시스템의 유일한 기준 상태가 된다.
-* 오프라인에서도 문서를 읽고 수정할 수 있다.
-* 네트워크 복구 후 변경사항이 자동으로 서버에 반영되고 다른 클라이언트로 전달된다.
-* 서로 다른 장치에서 동시에 수정된 문서를 무조건 덮어쓰지 않는다.
-* 클라이언트가 오랫동안 연결되지 않았더라도 다시 접속하면 서버의 최신 상태로 수렴한다.
-* 서버 연결이나 실시간 알림이 일시적으로 끊어져도 데이터 정합성이 깨지지 않는다.
+- 각 장치에서는 항상 로컬 Vault를 사용한다.
+- 서버 Vault가 전체 시스템의 유일한 기준 상태가 된다.
+- 오프라인에서도 문서를 읽고 수정할 수 있다.
+- 네트워크 복구 후 변경사항이 자동으로 서버에 반영되고 다른 클라이언트로 전달된다.
+- 서로 다른 장치에서 동시에 수정된 문서를 무조건 덮어쓰지 않는다.
+- 클라이언트가 오랫동안 연결되지 않았더라도 다시 접속하면 서버의 최신 상태로 수렴한다.
+- 서버 연결이나 실시간 알림이 일시적으로 끊어져도 데이터 정합성이 깨지지 않는다.
 
 ---
 
@@ -48,12 +49,12 @@ Obsidian은 로컬 파일을 중심으로 동작한다.
 
 특히 모바일 환경에서는 다음 상황을 안정적으로 처리해야 한다.
 
-* 앱이 백그라운드에서 종료된다.
-* 네트워크가 Wi-Fi와 모바일 데이터 사이에서 전환된다.
-* 장시간 오프라인 상태로 문서를 수정한다.
-* PC와 모바일에서 같은 문서를 동시에 수정한다.
-* 한 장치에서 문서를 삭제하거나 이동한 동안 다른 장치가 오래된 상태를 유지한다.
-* 실시간 연결이 끊겨 변경 알림을 받지 못한다.
+- 앱이 백그라운드에서 종료된다.
+- 네트워크가 Wi-Fi와 모바일 데이터 사이에서 전환된다.
+- 장시간 오프라인 상태로 문서를 수정한다.
+- PC와 모바일에서 같은 문서를 동시에 수정한다.
+- 한 장치에서 문서를 삭제하거나 이동한 동안 다른 장치가 오래된 상태를 유지한다.
+- 실시간 연결이 끊겨 변경 알림을 받지 못한다.
 
 VaultDatum는 실시간 연결 자체를 신뢰하지 않고 **서버 Vault의 현재 상태와 변경 이력을 기준으로 클라이언트를 다시 수렴시킴으로써** 이러한 문제를 해결한다.
 
@@ -98,10 +99,10 @@ Laptop Vault ────┘         ▼
 
 대신 다음 조건이 만족되면 모든 클라이언트는 최종적으로 VaultDatum Server와 동일한 상태에 도달해야 한다.
 
-* 네트워크 연결이 가능하다.
-* 충분한 동기화 시간이 주어진다.
-* 해결되지 않은 충돌이 존재하지 않는다.
-* 새로운 변경이 계속 발생하지 않는다.
+- 네트워크 연결이 가능하다.
+- 충분한 동기화 시간이 주어진다.
+- 해결되지 않은 충돌이 존재하지 않는다.
+- 새로운 변경이 계속 발생하지 않는다.
 
 ### 3.4 Offline First
 
@@ -129,13 +130,13 @@ VaultDatum는 사용자 관점에서 다음 두 구성요소를 가진다.
 
 역할:
 
-* Authoritative Vault 보관
-* 클라이언트 변경 수신 및 확정
-* 변경 이력 제공
-* 클라이언트 간 변경 전달
-* 충돌 감지
-* 동기화 상태 관리
-* 선택적인 클라이언트 인증 및 접근 통제
+- Authoritative Vault 보관
+- 클라이언트 변경 수신 및 확정
+- 변경 이력 제공
+- 클라이언트 간 변경 전달
+- 충돌 감지
+- 동기화 상태 관리
+- 선택적인 클라이언트 인증 및 접근 통제
 
 네트워크 접근 통제와 통신 보안은 배포 방식에 따라 WireGuard 등의 외부 VPN에 위임할 수 있다.
 
@@ -145,12 +146,12 @@ VaultDatum는 사용자 관점에서 다음 두 구성요소를 가진다.
 
 역할:
 
-* 로컬 Vault 변경 감지
-* 서버에 로컬 변경 전달
-* 서버 변경 수신
-* 오프라인 변경 보관
-* 동기화 상태 표시
-* 충돌 표시 및 해결 지원
+- 로컬 Vault 변경 감지
+- 서버에 로컬 변경 전달
+- 서버 변경 수신
+- 오프라인 변경 보관
+- 동기화 상태 표시
+- 충돌 표시 및 해결 지원
 
 VaultDatum Server 자체는 Obsidian UI를 제공하지 않는다.
 
@@ -212,11 +213,11 @@ VaultDatum의 동기화 단위는 Obsidian Vault 안의 사용자 콘텐츠 파�
 
 지원 대상:
 
-* Markdown 문서
-* 디렉터리
-* 이미지
-* PDF
-* 기타 Obsidian Attachment
+- Markdown 문서
+- 디렉터리
+- 이미지
+- PDF
+- 기타 Obsidian Attachment
 
 ### 6.1 `.obsidian` 제외
 
@@ -226,11 +227,11 @@ Obsidian 설정과 플러그인 구성은 장치별로 다를 수 있기 때문�
 
 예를 들어:
 
-* 모바일에서만 사용하는 플러그인
-* 데스크탑에서만 사용하는 플러그인
-* 장치별 UI 설정
-* 장치별 Workspace 상태
-* 플랫폼에 따라 다른 플러그인 설정
+- 모바일에서만 사용하는 플러그인
+- 데스크탑에서만 사용하는 플러그인
+- 장치별 UI 설정
+- 장치별 Workspace 상태
+- 플랫폼에 따라 다른 플러그인 설정
 
 등이 존재할 수 있다.
 
@@ -253,11 +254,11 @@ Vault/
 
 VaultDatum는 최소 다음 변경을 구분할 수 있어야 한다.
 
-* Create
-* Modify
-* Delete
-* Rename
-* Move
+- Create
+- Modify
+- Delete
+- Rename
+- Move
 
 여러 파일에 발생한 관련 변경이 하나의 작업으로 처리될 필요가 있는 경우 향후 하나의 논리적인 변경 단위로 다룰 수 있다.
 
@@ -293,10 +294,10 @@ VaultDatum는 서버에 존재하는 새로운 변경을 오래된 클라이언�
 
 다음 상황은 명시적으로 처리한다.
 
-* 한 장치에서 삭제하고 다른 장치에서 수정
-* 한 장치에서 이동하고 다른 장치에서 수정
-* 삭제된 문서를 오래된 오프라인 장치가 다시 업로드
-* 서로 다른 장치에서 동일 파일을 서로 다른 위치로 이동
+- 한 장치에서 삭제하고 다른 장치에서 수정
+- 한 장치에서 이동하고 다른 장치에서 수정
+- 삭제된 문서를 오래된 오프라인 장치가 다시 업로드
+- 서로 다른 장치에서 동일 파일을 서로 다른 위치로 이동
 
 데이터를 조용히 유실시키는 자동 해결보다 충돌로 남기는 것을 우선한다.
 
@@ -306,28 +307,35 @@ VaultDatum는 서버에 존재하는 새로운 변경을 오래된 클라이언�
 
 사용자는 현재 VaultDatum의 상태를 쉽게 확인할 수 있어야 한다.
 
-최소 다음 상태를 표현한다.
+최소 다음 사용자 상태를 표현한다.
 
 ```text
-Synced
-Uploading
-Downloading
+Setup Required
+First Sync
+Up to Date
+Syncing
+  └─ 필요하면 Uploading / Downloading 단계를 보조로 설명
+Paused
 Offline
 Pending Changes
 Conflict
 Error
+Recovery Required
 ```
 
 Obsidian의 Status Bar 또는 전용 Sync 화면에서 다음 정보를 확인할 수 있어야 한다.
 
-* 서버 연결 상태
-* 동기화 여부
-* 업로드 대기 변경
-* 다운로드 대기 변경
-* 충돌 여부
-* 마지막 성공 동기화 시각
+- 서버 연결 상태
+- 동기화 여부
+- 업로드 대기 변경
+- 다운로드 대기 변경
+- 충돌 여부
+- 마지막 성공 동기화 시각
 
 일반적인 사용 중에는 사용자가 Sync 화면을 지속적으로 확인할 필요가 없어야 한다.
+
+Client가 이 상태를 어떻게 설명하고, 첫 연결·오류·복구를 어떤 화면과 Action으로
+제공하는지는 [12 Client User Experience](./12_client-user-experience.md)를 따른다.
 
 ---
 
@@ -337,13 +345,16 @@ VaultDatum는 기본적으로 사용자의 수동 조작 없이 동작한다.
 
 다음 상황에서 자동으로 동기화를 시도한다.
 
-* 로컬 파일이 변경됨
-* 서버의 새로운 변경을 감지함
-* 네트워크가 복구됨
-* Obsidian이 다시 실행됨
-* 일정 시간 동안 동기화되지 않음
+- 로컬 파일이 변경됨
+- 서버의 새로운 변경을 감지함
+- 네트워크가 복구됨
+- Obsidian이 다시 실행됨
+- 일정 시간 동안 동기화되지 않음
 
 사용자는 필요할 경우 **Sync Now** 명령을 통해 즉시 동기화를 요청할 수 있어야 한다.
+
+수동 요청은 정상 동기화의 전제 조건이 아니다. 연결 설정과 상태 표시의 사용자
+경험은 [12 Client User Experience](./12_client-user-experience.md)를 따른다.
 
 ---
 
@@ -410,11 +421,11 @@ Private Network
 
 WireGuard와 같은 VPN을 사용하는 경우 다음 기능을 외부 네트워크 계층에 위임할 수 있다.
 
-* 외부 네트워크에서 VaultDatum Server 접근 차단
-* 장치 인증
-* 장치별 접근 폐기
-* 통신 암호화
-* 서버와 클라이언트 사이의 사설 네트워크 구성
+- 외부 네트워크에서 VaultDatum Server 접근 차단
+- 장치 인증
+- 장치별 접근 폐기
+- 통신 암호화
+- 서버와 클라이언트 사이의 사설 네트워크 구성
 
 ### 12.2 VPN 사용
 
@@ -466,18 +477,18 @@ VaultDatum Server는 Vault 동기화에 필요하지 않은 시스템 자원에 
 
 VaultDatum는 다음 상황을 정상적인 동작 환경의 일부로 간주한다.
 
-* 인터넷 단절
-* Wi-Fi ↔ 모바일 네트워크 전환
-* VPN 연결 단절 및 복구
-* 실시간 연결 끊김
-* HTTP Timeout
-* 모바일 앱 강제 종료
-* OS에 의한 Background Process 종료
-* PC 절전
-* 클라이언트 Crash
-* 서버 재시작
-* 동일 요청 재전송
-* 장기간 오프라인 상태
+- 인터넷 단절
+- Wi-Fi ↔ 모바일 네트워크 전환
+- VPN 연결 단절 및 복구
+- 실시간 연결 끊김
+- HTTP Timeout
+- 모바일 앱 강제 종료
+- OS에 의한 Background Process 종료
+- PC 절전
+- 클라이언트 Crash
+- 서버 재시작
+- 동일 요청 재전송
+- 장기간 오프라인 상태
 
 이러한 사건 자체가 Vault 손상이나 파일 유실을 발생시켜서는 안 된다.
 
@@ -517,48 +528,48 @@ VaultDatum Server의 Vault는 별도의 백업 정책을 사용할 수 있어야
 
 지원:
 
-* VaultDatum Server
-* VaultDatum for Obsidian
-* Desktop Obsidian
-* Android Obsidian
-* Markdown Create
-* Markdown Modify
-* Markdown Delete
-* 기본 Rename/Move
-* 자동 동기화
-* 수동 동기화
-* 오프라인 변경 보존
-* 증분 동기화
-* 기본 충돌 감지
-* 충돌 시 양쪽 데이터 보존
-* 연결 복구 후 Catch-up
-* `.obsidian/` 제외
-* VPN 기반 배포 지원
-* Sync Status
+- VaultDatum Server
+- VaultDatum for Obsidian
+- Desktop Obsidian
+- Android Obsidian
+- Markdown Create
+- Markdown Modify
+- Markdown Delete
+- 기본 Rename/Move
+- 자동 동기화
+- 수동 동기화
+- 오프라인 변경 보존
+- 증분 동기화
+- 기본 충돌 감지
+- 충돌 시 양쪽 데이터 보존
+- 연결 복구 후 Catch-up
+- `.obsidian/` 제외
+- VPN 기반 배포 지원
+- Sync Status
 
 ### MVP 2 — Attachment & Conflict UX
 
 지원:
 
-* Conflict UI 개선
-* 이미지 및 일반 Attachment
-* Binary Conflict 처리
-* 삭제 충돌 강화
-* Rename/Move 충돌 강화
-* 대량 변경 Catch-up 최적화
+- Conflict UI 개선
+- 이미지 및 일반 Attachment
+- Binary Conflict 처리
+- 삭제 충돌 강화
+- Rename/Move 충돌 강화
+- 대량 변경 Catch-up 최적화
 
 ### MVP 3 — Advanced Reconciliation & Recovery
 
 지원:
 
-* Markdown 3-way merge
-* 자동 또는 반자동 충돌 해결
-* 여러 파일 변경의 논리적 단위 보장
-* 장애 중 부분 적용 방지
-* 긴 오프라인 기간에 대한 안정성 강화
-* 서버 장애 복구 강화
-* Vault 무결성 검사
-* 대규모 Vault 성능 개선
+- Markdown 3-way merge
+- 자동 또는 반자동 충돌 해결
+- 여러 파일 변경의 논리적 단위 보장
+- 장애 중 부분 적용 방지
+- 긴 오프라인 기간에 대한 안정성 강화
+- 서버 장애 복구 강화
+- Vault 무결성 검사
+- 대규모 Vault 성능 개선
 
 ---
 
@@ -566,19 +577,19 @@ VaultDatum Server의 Vault는 별도의 백업 정책을 사용할 수 있어야
 
 초기 VaultDatum는 다음 문제를 해결하지 않는다.
 
-* Markdown 자동 3-way merge
-* 여러 사용자의 공동 편집
-* Google Docs 수준의 실시간 동시 편집
-* Character 단위 실시간 Merge
-* CRDT 기반 협업
-* 서버 Cluster 및 High Availability
-* 여러 VaultDatum Server 간 Federation
-* 범용 원격 파일시스템
-* Git Client 대체
-* Obsidian 이외 애플리케이션의 범용 파일 동기화
-* `.obsidian/` 동기화
-* Obsidian Plugin 설정 동기화
-* AI Agent 
+- Markdown 자동 3-way merge
+- 여러 사용자의 공동 편집
+- Google Docs 수준의 실시간 동시 편집
+- Character 단위 실시간 Merge
+- CRDT 기반 협업
+- 서버 Cluster 및 High Availability
+- 여러 VaultDatum Server 간 Federation
+- 범용 원격 파일시스템
+- Git Client 대체
+- Obsidian 이외 애플리케이션의 범용 파일 동기화
+- `.obsidian/` 동기화
+- Obsidian Plugin 설정 동기화
+- AI Agent
 
 AI Agent는 VaultDatum와 독립적인 별도 제품 또는 확장 기능으로 다룬다.
 

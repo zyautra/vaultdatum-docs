@@ -21,19 +21,23 @@ Client State
 
 Client Architecture의 핵심 책임은 다음과 같다.
 
-* Obsidian의 Local Vault 변경 감지
-* Offline 변경의 durable 보존
-* 서버 변경 Pull 및 Local Vault 반영
-* Replica Index 관리
-* Pending Operation 관리
-* Local / Remote 동시 변경 충돌 감지
-* Remote Apply에 의한 Sync Loop 방지
-* Client Crash 이후 복구
-* Event 유실 이후 복구
-* 모바일 환경 지원
-* Reconciliation Scheduling
+- Obsidian의 Local Vault 변경 감지
+- Offline 변경의 durable 보존
+- 서버 변경 Pull 및 Local Vault 반영
+- Replica Index 관리
+- Pending Operation 관리
+- Local / Remote 동시 변경 충돌 감지
+- Remote Apply에 의한 Sync Loop 방지
+- Client Crash 이후 복구
+- Event 유실 이후 복구
+- 모바일 환경 지원
+- Reconciliation Scheduling
 
-본 문서에서는 구체적인 HTTP Endpoint, UI 구성 및 정확한 Client Storage 구현 기술은 확정하지 않는다.
+본 문서에서는 구체적인 HTTP Endpoint와 UI 구성을 확정하지 않는다. 연결 설정,
+첫 동기화, 상태 표시, conflict 진입, 진단과 reset의 사용자 경험은
+[12 Client User Experience](./12_client-user-experience.md)를 따른다. 정확한
+Client Storage 구현 기술은 [08 Persistence Design](./08_persistence-design.md)을
+따른다.
 
 ---
 
@@ -348,10 +352,10 @@ Client는 Replica Index, Server Cursor, Pending Operation, Apply Journal, Confli
 
 이 아키텍처에서 중요한 사용 규칙은 다음과 같다.
 
-* Replica Index는 Local Vault의 현재 내용이 아니라 Client가 처리한 Server 지식이다.
-* Cursor는 처리한 Change Stream 범위를, Replica Index는 path별 Server 상태를 나타내므로 서로 대체할 수 없다.
-* Pending Operation은 Server Commit 확인 전까지 제거하지 않으며, 같은 Operation ID로 retry할 수 있어야 한다.
-* Upload 직전 Local Hash가 기록된 Pending 상태와 다르면, Change Analyzer가 현재 Local 상태를 다시 판단한다.
+- Replica Index는 Local Vault의 현재 내용이 아니라 Client가 처리한 Server 지식이다.
+- Cursor는 처리한 Change Stream 범위를, Replica Index는 path별 Server 상태를 나타내므로 서로 대체할 수 없다.
+- Pending Operation은 Server Commit 확인 전까지 제거하지 않으며, 같은 Operation ID로 retry할 수 있어야 한다.
+- Upload 직전 Local Hash가 기록된 Pending 상태와 다르면, Change Analyzer가 현재 Local 상태를 다시 판단한다.
 
 ---
 
@@ -544,7 +548,7 @@ RUNNING ── trigger during run ──► RUNNING + FOLLOW_UP flag
 
 실행 중 새 Trigger가 생기면 별도 병렬 Sync를 시작하지 않고, 현재 Cycle 종료 후 한 번 더 실행한다. retry timer는 foreground에서 실행 중인 Client를 위한 최적화일 뿐이며, background 실행이나 영구적인 WebSocket 연결을 전제로 하지 않는다.
 
-Client는 상태 표시를 통해 자동 동기화가 실제로 수행되었는지 알 수 있어야 한다. 최소한 `Syncing`, `Up to date`, `Pending`, `Offline`, `Conflict`, `Error`와 마지막 성공 시각을 제공한다. 자동 실행 실패는 상태에 남기고, 사용자 조치가 필요한 Conflict와 지속 Error만 눈에 띄게 알린다.
+Client는 상태 표시를 통해 자동 동기화가 실제로 수행되었는지 알 수 있어야 한다. 최소한 `Syncing`, `Up to date`, `Pending`, `Offline`, `Conflict`, `Error`와 마지막 성공 시각을 제공한다. 자동 실행 실패는 상태에 남기고, 사용자 조치가 필요한 Conflict와 지속 Error만 눈에 띄게 알린다. 표시 상태의 우선순위, 문구, 진입점과 Action은 [12 Client User Experience](./12_client-user-experience.md)를 따른다.
 
 ---
 

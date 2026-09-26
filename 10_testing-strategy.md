@@ -4,7 +4,7 @@
 
 이 문서는 Sync System의 correctness를 검증하기 위한 테스트 전략을 정의한다.
 
-테스트의 기대 결과는 제품 요구사항·프로토콜·전문 설계 문서에서 가져온다. 본 문서는 이를 별도의 동작 명세로 다시 정의하지 않고, [00 Product Specification](./00_product-specification.md), [02 Synchronization Protocol](./02_synchronization-protocol.md), [05 Conflict Resolution](./05_conflict-resolution.md), [03 Server Architecture](./03_server-architecture.md), [04 Client Architecture](./04_client-architecture.md)의 규칙을 검증 가능한 시나리오로 매핑한다.
+테스트의 기대 결과는 제품 요구사항·프로토콜·전문 설계 문서에서 가져온다. 본 문서는 이를 별도의 동작 명세로 다시 정의하지 않고, [00 Product Specification](./00_product-specification.md), [02 Synchronization Protocol](./02_synchronization-protocol.md), [05 Conflict Resolution](./05_conflict-resolution.md), [03 Server Architecture](./03_server-architecture.md), [04 Client Architecture](./04_client-architecture.md), [12 Client User Experience](./12_client-user-experience.md)의 규칙을 검증 가능한 시나리오로 매핑한다.
 
 이 프로젝트에서 중요한 것은 개별 함수의 완벽한 테스트 커버리지가 아니다.
 
@@ -806,7 +806,6 @@ Manifest 이후 Change Pull
 
 이다.
 
-
 ## 13.2 Existing Local Vault Bootstrap
 
 기존 Local 파일이 있는 새 Client가 기존 Server Vault에 연결하는 경우 다음 경로별 결과를 검증한다.
@@ -830,12 +829,12 @@ Server UNKNOWN + Local file 또는 empty directory
 
 추가로 다음을 검증한다.
 
-* `.obsidian/`과 지원하지 않는 path가 scan, manifest, pending 어느 쪽에도 나타나지 않는다.
-* 제한을 넘는 Local attachment는 upload하지 않고 사용자에게 제외 상태가 보인다.
-* 하나의 경로가 Conflict여도 다른 `UNKNOWN` Local 경로의 CREATE는 계속 진행된다.
-* Bootstrap 완료 metadata는 모든 경로가 Replica, Conflict, Pending, 또는 제외 상태로 durable 분류된 뒤에만 기록된다.
-* 기존 `0.1.0` Replica의 offline MODIFY 또는 DELETE는 manifest가 동일 Base State를 보일 때 Pending으로 유지되며, 초기 import Conflict가 되지 않는다.
-* 기존 `0.1.0`의 in-flight operation은 Change Journal에 같은 Operation ID가 있으면 own commit으로 복구한 뒤 fresh manifest를 통합한다. 이후 다른 Client의 변경도 정상적으로 적용되어야 한다.
+- `.obsidian/`과 지원하지 않는 path가 scan, manifest, pending 어느 쪽에도 나타나지 않는다.
+- 제한을 넘는 Local attachment는 upload하지 않고 사용자에게 제외 상태가 보인다.
+- 하나의 경로가 Conflict여도 다른 `UNKNOWN` Local 경로의 CREATE는 계속 진행된다.
+- Bootstrap 완료 metadata는 모든 경로가 Replica, Conflict, Pending, 또는 제외 상태로 durable 분류된 뒤에만 기록된다.
+- 기존 `0.1.0` Replica의 offline MODIFY 또는 DELETE는 manifest가 동일 Base State를 보일 때 Pending으로 유지되며, 초기 import Conflict가 되지 않는다.
+- 기존 `0.1.0`의 in-flight operation은 Change Journal에 같은 Operation ID가 있으면 own commit으로 복구한 뒤 fresh manifest를 통합한다. 이후 다른 Client의 변경도 정상적으로 적용되어야 한다.
 
 ---
 

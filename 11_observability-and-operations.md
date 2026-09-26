@@ -708,7 +708,9 @@ Local Vault를 먼저 삭제하거나 Server Vault로 무조건 덮어쓰지 않
 
 # 29. Client State Reset
 
-Client Sync State Reset은 마지막 수단이다.
+Client Sync State Reset은 마지막 수단이다. 사용자가 보는 reset의 순서, 경고,
+일반 reset과 connection settings reset의 구분은
+[12 Client User Experience](./12_client-user-experience.md)를 따른다.
 
 Reset 대상:
 
@@ -723,6 +725,10 @@ Apply Journal
 등이다.
 
 Pending 또는 Conflict가 존재하면 사용자의 변경을 잃을 수 있으므로 명시적인 경고 없이 Reset하지 않는다.
+
+일반 reset은 Local Vault 또는 Server Vault의 파일을 삭제하거나 덮어쓰지 않고,
+이후 Server-first Bootstrap으로 다시 분류해야 한다. 표준 사용자 절차가 browser
+developer tools나 IndexedDB 이름을 요구해서는 안 된다.
 
 ---
 
