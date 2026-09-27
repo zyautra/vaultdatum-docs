@@ -136,7 +136,7 @@ VaultDatum는 사용자 관점에서 다음 두 구성요소를 가진다.
 - 클라이언트 간 변경 전달
 - 충돌 감지
 - 동기화 상태 관리
-- 선택적인 클라이언트 인증 및 접근 통제
+- 배포 profile에 따른 클라이언트 인증 및 접근 통제
 
 네트워크 접근 통제와 통신 보안은 배포 방식에 따라 WireGuard 등의 외부 VPN에 위임할 수 있다.
 
@@ -459,7 +459,9 @@ Authentication
 VaultDatum Server
 ```
 
-VPN을 사용하지 않는 환경에서는 VaultDatum 또는 VaultDatum 앞단의 별도 구성요소가 적절한 통신 보호와 접근 통제를 제공해야 한다.
+VPN을 사용하지 않는 환경에서는 VaultDatum 또는 VaultDatum 앞단의 별도 구성요소가 적절한 통신 보호와 접근 통제를 제공해야 한다. `0.4.0`의 개인용 public
+profile은 HTTPS와 운영자가 provision한 Vault bearer token을 사용한다. 이것은 여러
+사용자 계정 또는 공개 가입 기능을 뜻하지 않는다.
 
 구체적인 인증 방식, TLS 구성, VPN 구성은 제품 사양이 아닌 배포 및 아키텍처 문서에서 정의한다.
 
@@ -571,6 +573,20 @@ VaultDatum Server의 Vault는 별도의 백업 정책을 사용할 수 있어야
 - Vault 무결성 검사
 - 대규모 Vault 성능 개선
 
+### 0.4.0 — Public Personal Vault Access
+
+지원:
+
+- public Vault별 HTTPS endpoint
+- 운영자가 provision한 Vault bearer token
+- Vault token 교체로 전체 access 무효화
+- authenticated HTTP Sync API
+- one-time ticket을 사용하는 authenticated notification WebSocket
+- public Gateway, NetworkPolicy, token redaction 배포 계약
+
+`0.4.0`의 인증·배포·token lifecycle 세부 규칙은 [09 Security and
+Deployment](./09_security-and-deployment.md)를 따른다.
+
 ---
 
 ## 17. MVP에서 제외하는 기능
@@ -640,6 +656,13 @@ VaultDatum Server가 일시적으로 사용할 수 없더라도 사용자는 자
 `.obsidian/`을 비롯한 VaultDatum의 동기화 제외 영역은 클라이언트별 로컬 상태로 유지되어야 한다.
 
 VaultDatum가 해당 상태를 다른 클라이언트의 상태로 덮어써서는 안 된다.
+
+### Invariant 10 — Public Access Requires a Vault Token
+
+public deployment의 요청은 HTTPS/WSS와 유효한 Vault token을 통해서만
+Authoritative Vault에 접근할 수 있어야 한다. token은 동기화되는 콘텐츠나 URL에
+포함되어서는 안 된다. 세부 규칙은 [09 Security and
+Deployment](./09_security-and-deployment.md)를 따른다.
 
 ---
 

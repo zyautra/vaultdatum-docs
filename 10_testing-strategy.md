@@ -984,7 +984,29 @@ Restart 후 다시 복구할 수 있어야 한다.
 
 ---
 
-# 15. Core Invariants
+# 15. Public Access Security
+
+`public-token` profile은 private network 테스트와 별도로 실제 TLS-terminating Gateway를
+통과하는 integration test를 가진다. 최소 다음을 검증한다.
+
+| 시나리오 | 기대 결과 |
+| --- | --- |
+| token 없음 | 모든 protected HTTP API가 `401`이며 Vault ID, revision, path를 노출하지 않음 |
+| malformed 또는 wrong token | `401`; Server/Gateway log와 error response에 token이 없음 |
+| valid token | manifest, change, content, mutation이 기존 sync semantics대로 동작 |
+| token rotation | Secret 교체·Pod restart 뒤 새 token만 동작하고 old token/ticket은 실패; Pending은 Client에서 보존 |
+| HTTP public URL | Client 설정이 거부하고 Gateway가 HTTPS로만 Sync traffic을 전달 |
+| redirect | Client가 다른 origin으로 Authorization header를 전달하지 않음 |
+| realtime ticket replay | 첫 handshake만 성공하고 두 번째는 거부 |
+| ticket expiry | 만료 ticket이 거부되며 HTTP catch-up이 계속 가능 |
+| Gateway path | public Gateway 외 source는 NetworkPolicy 때문에 Server Service에 접근하지 못함 |
+
+테스트 fixture의 secret은 deterministic test-only 값으로 제한하고, test output과
+snapshot에 실제 production Vault token을 넣지 않는다.
+
+---
+
+# 16. Core Invariants
 
 E2E Scenario마다 가능한 한 다음을 확인한다.
 
@@ -1008,7 +1030,7 @@ Conflict와 Pending이 없으면 결국 Client는 Server State로 수렴한다.
 
 ---
 
-# 16. MVP Release Gate
+# 17. Release Gate
 
 MVP Release 전에 최소 다음 Scenario를 통과해야 한다.
 
@@ -1056,9 +1078,13 @@ MVP Release 전에 최소 다음 Scenario를 통과해야 한다.
 
 이 Scenario들이 실제 Component를 사용해 안정적으로 반복 실행되면 MVP 수준의 Sync Correctness는 충분히 검증된 것으로 본다.
 
+`0.4.0 public-token` release는 위 Sync Scenario에 더해 `#15 Public Access Security`의
+모든 scenario를 실제 TLS Gateway, NetworkPolicy, token Secret volume과 함께
+통과해야 한다. mock Authorization filter만 통과한 결과는 public release gate가 아니다.
+
 ---
 
-# 17. Future Testing
+# 18. Future Testing
 
 시스템 규모와 복잡도가 커졌을 때 다음을 추가할 수 있다.
 

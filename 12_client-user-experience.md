@@ -234,6 +234,8 @@ network 요청을 보내거나 error 상태로 바꾸지 않는다.
 ```text
 Server URL field
 
+Vault access token field (when required)
+
 Test connection
 
 Save and start sync
@@ -242,9 +244,11 @@ Save and start sync
 ```
 
 `Test connection`은 Server health와 Vault 정보를 확인할 수 있지만 Local Vault를
-변경하거나 operation을 전송하지 않는다. `Save and start sync`는 URL을 durable하게
-저장하고 normal scheduler를 깨운다. 서버가 일시적으로 닿지 않아도 URL은 저장할
-수 있어야 하며, 이 경우 상태는 `Offline or retrying`으로 명확히 표시한다.
+변경하거나 operation을 전송하지 않는다. public Server가 Vault token을 요구하면 Test는
+입력된 token으로만 요청하며 token value를 notice나 diagnostic에 되돌려 보여 주지
+않는다. `Save and start sync`는 URL과 필요한 Vault token을 durable하게 저장하고 normal
+scheduler를 깨운다. 서버가 일시적으로 닿지 않아도 URL은 저장할 수 있어야 하며, 이
+경우 상태는 `Offline or retrying`으로 명확히 표시한다.
 
 `저장됨`과 `연결됨`은 같은 상태가 아니다. URL이 저장된 뒤에도 Server가 닿지
 않을 수 있으므로 화면은 최소 다음을 구분한다.
@@ -260,7 +264,49 @@ Save and start sync
 유효한 다른 URL을 입력했을 때만 다시 `Save and start sync`를 활성화한다. 저장
 요청이 진행 중이면 중복 요청을 막고 `Saving…` 상태를 보여 준다.
 
-### 5.2 URL과 private network 안내
+### 5.2 Public Vault token
+
+`public-token` Server는 Vault access token 없이는 연결할 수 없다. Client는 Server가
+`401` Bearer challenge를 반환하거나 사용자가 token을 입력했을 때 다음 field를 보인다.
+
+```text
+Vault access token
+••••••••••••••••
+```
+
+field는 기본적으로 mask하고, 사용자가 누르는 동안만 값을 보이는 reveal control을
+제공한다. token을 URL, QR code가 아닌 화면 screenshot, status bar, notification,
+diagnostic에 넣지 않는다. Client는 token을 해당 Obsidian Vault의 plugin-local settings에만
+보관하며 동기화하지 않는다.
+
+사용자에게 다음 경계를 설명한다.
+
+> 이 token을 가진 사람은 이 Vault에 접근할 수 있습니다. 기기를 잃었거나 token이
+> 노출되었다고 의심되면 Server 관리자에게 Vault token 교체를 요청하세요. 교체 뒤에는
+> 모든 연결 장치에 새 token을 다시 입력해야 합니다.
+
+token이 없는 public Server는 `Authentication required` 상태로 표시하고, 자동 retry를
+계속하지 않는다. 사용자가 유효한 token을 저장하면 scheduler를 즉시 다시 시작한다.
+
+#### 최초 연결 절차
+
+`0.4.0`은 사용자 가입이나 로그인 화면을 제공하지 않는다. Vault 소유자(운영자)가
+배포 시 Vault token을 생성하고 Secret으로 Server에 mount한 뒤, URL과 token을 신뢰할 수
+있는 비공개 채널(예: password manager 또는 end-to-end encrypted messenger)로 장치
+사용자에게 전달한다. token을 URL query나 QR code에 넣지 않는다.
+
+장치 사용자는 다음 순서로 최초 연결한다.
+
+1. VaultDatum settings에서 public `https://` Server URL을 입력한다.
+2. `Test connection`이 `Authentication required`를 표시하면 `Vault access token` field에 받은 token을 붙여 넣는다. token을 미리 받았다면 Test 전에 입력해도 된다.
+3. 다시 `Test connection`을 눌러 Vault identity를 확인한다. 이 단계는 파일을 올리거나 내려받지 않는다.
+4. `Save and start sync`를 누른다. URL과 token은 해당 Obsidian Vault의 plugin-local settings에만 저장되고 첫 동기화가 시작된다.
+
+device 분실이나 token 노출 뒤 Server 관리자가 token을 교체하면, 각 장치는 다시
+`Authentication required`가 된다. 사용자는 새 token을 입력하고 저장하면 되며, 기존
+Pending Operation과 Local file을 지우거나 Vault를 다시 만들 필요는 없다.
+
+### 5.3 URL과 private network 안내
 
 Client는 명시적인 `https://` 또는 `http://` URL만 받아들인다. `http://`를
 기술적으로 막지는 않는다. WireGuard 같은 보호된 private network에서 운영하는
@@ -274,7 +320,7 @@ Client는 명시적인 `https://` 또는 `http://` URL만 받아들인다. `http
 이 안내는 private VPN 운영을 오류로 취급하지 않으며, URL이 localhost인지
 public address인지로 네트워크 보안을 잘못 판단하지 않는다.
 
-### 5.3 다른 Server Vault로의 변경
+### 5.4 다른 Server Vault로의 변경
 
 이미 Vault identity가 기록된 Client가 다른 Vault identity를 반환하는 URL을
 입력하면, URL만 바꾸어 기존 sync state를 재사용해서는 안 된다.
@@ -290,6 +336,10 @@ public address인지로 네트워크 보안을 잘못 판단하지 않는다.
 사용자는 이전 설정으로 돌아가거나, Advanced recovery의 보호된 절차를 통해
 새로운 Client state를 시작할 수 있다. 자동으로 다른 Server를 신뢰하거나
 기존 Pending을 전송하지 않는다.
+
+HTTPS public URL의 origin이 달라지는 경우 기존 Vault access token을 새 URL로 자동
+전달해서는 안 된다. 새 origin에는 token을 다시 명시적으로 입력하고 Test connection을
+통과해야 한다.
 
 ---
 
@@ -448,7 +498,8 @@ VPN이 사용되는 설치에서는 VPN 연결을 확인하라는 추천 Action�
 | 연결 불가            | `서버에 연결할 수 없습니다`                           | `Retry now`                  |
 | Server 응답 오류     | `서버가 동기화를 처리할 수 없습니다`                  | `Retry now`와 진단 보기      |
 | 지원하지 않는 Server | `이 Server 버전과 호환되지 않습니다`                  | `View compatibility details` |
-| 권한 또는 인증 오류  | `이 Vault에 접근할 수 없습니다`                       | `Review connection setup`    |
+| 인증 필요            | `이 Vault access token을 입력하세요`                  | `Enter access token`         |
+| 인증 거부 또는 token 교체 | `이 Vault access token을 업데이트하세요`             | `Update access token`        |
 | local recovery 문제  | `이 기기의 동기화 상태를 안전하게 확인할 수 없습니다` | `Open recovery`              |
 
 raw error code와 stack trace는 기본 문구로 사용하지 않는다. 원문은 사용자가
@@ -665,7 +716,7 @@ Save merged result → Saving… (disabled)
   있어야 한다.
 - 긴 경로는 안전하게 줄바꿈하거나 생략하고, 접근 가능한 전체 값을 제공한다.
 - note 내용은 사용자가 특정 conflict를 열었을 때에만 표시한다. notice, log,
-  diagnostic에는 note 내용이나 credential을 넣지 않는다.
+  diagnostic에는 note 내용이나 Vault access token을 넣지 않는다.
 
 다음 시나리오를 검증한다.
 
@@ -737,7 +788,7 @@ durable하게 보존하고, 사용자가 해당 backup 위치와 영향 범위�
 | Reset connection settings | Server URL와 pause preference                                | Client sync state와 Local Vault      |
 | Reset sync tracking       | replica, cursor, pending이 없는 sync metadata, apply journal | Local Vault, Server Vault, 연결 설정 |
 
-`Reset connection settings`도 Server URL을 즉시 잃게 하므로 확인 modal을 거친다.
+`Reset connection settings`도 Server URL과 Vault access token을 즉시 잃게 하므로 확인 modal을 거친다.
 확인 뒤에는 입력 필드와 상태 요약을 저장된 빈 설정으로 즉시 다시 그려, 화면에
 이전 URL이 남아 있는 상태와 실제 저장 상태가 달라지지 않게 한다.
 
@@ -764,7 +815,7 @@ Cursor and revision, when available
 ```
 
 기본 diagnostic에는 note content, file content hash, authorization header,
-credential, recovery artifact content를 포함하지 않는다. 경로가 필요한 경우에도
+Vault access token, recovery artifact content를 포함하지 않는다. 경로가 필요한 경우에도
 사용자가 별도로 포함을 허용해야 한다.
 
 ---
@@ -876,7 +927,7 @@ mobile의 항상 실행되는 background sync
 | 여러 conflict 해소                            | Command Palette 없이 목록에서 상태별 Action을 연속으로 선택할 수 있음       |
 | Pending 또는 conflict가 없는 state reset      | Local/Server 파일을 삭제하지 않고 Server-first Bootstrap으로 재시작함       |
 | Pending 또는 conflict가 있는 state reset 시도 | 위험 설명과 review 경로를 제공하고 일반 reset을 실행하지 않음               |
-| diagnostic 복사                               | note content, credential, authorization header가 포함되지 않음              |
+| diagnostic 복사                               | note content, Vault access token, authorization header가 포함되지 않음     |
 
 이 시나리오는 [10 Testing Strategy](./10_testing-strategy.md)의 Client integration 및
 E2E test에 반영한다. UI 문구만 확인하는 test에 그치지 않고, 각 화면 상태가
@@ -911,4 +962,4 @@ active Pending 또는 conflict가 있을 때에는 명시적인 보호 절차 �
 ### Invariant 5 — Diagnostics Are Useful Without Leaking Content
 
 사용자와 운영자가 상태를 진단할 수 있어야 하지만, 기본 UI, 알림, diagnostic,
-log에는 Vault content와 credential을 포함하지 않는다.
+log에는 Vault content와 Vault access token을 포함하지 않는다.

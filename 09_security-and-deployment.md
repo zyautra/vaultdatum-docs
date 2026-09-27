@@ -16,13 +16,14 @@ Home Server
 Desktop / Laptop / Mobile Clients
 ```
 
-따라서 별도의 사용자 계정 시스템이나 복잡한 인증 인프라를 구축하지 않는다.
-
-기본 원칙은:
+`0.3.x`의 기본 원칙은 다음과 같다.
 
 > **Sync Server를 Public Internet에 직접 노출하지 않고, 승인된 개인 Device만 접근할 수 있는 Private Network 안에서 운영한다.**
 
-이다.
+`0.4.0`은 이 private 배포 모델을 유지하면서, 단일 개인 Vault를 public Internet에서
+사용할 수 있는 별도 access profile을 추가한다. public profile은 HTTPS와 Vault별
+bearer token을 함께 사용하며, 익명 접근, 사용자 가입, password login, 여러
+사용자 권한 모델을 추가하지 않는다.
 
 ---
 
@@ -84,7 +85,7 @@ Peer Authentication
 Network Encryption
 ```
 
-따라서 Sync Application 자체에서 별도의:
+따라서 `private-network` profile에서는 Sync Application 자체에서 별도의:
 
 ```text
 User Account
@@ -98,7 +99,8 @@ OIDC
 Device Provisioning System
 ```
 
-을 MVP에 구현하지 않는다.
+을 구현하지 않는다. `public-token` profile의 Vault token은 VPN의 대체 network
+boundary이며 사용자 계정 시스템은 아니다.
 
 ---
 
@@ -110,7 +112,7 @@ Sync Protocol의:
 clientId
 ```
 
-는 Security Credential이 아니다.
+는 access token이 아니다.
 
 용도는 다음과 같다.
 
@@ -129,7 +131,7 @@ VPN이 Client의 Network Access를 이미 제한한다고 가정한다.
 ```text
 clientId
     ≠
-authentication credential
+Vault access token
 ```
 
 이다.
@@ -162,71 +164,113 @@ Public Internet에서 직접 접근 불가능
 
 ---
 
-# 7. Public Internet 직접 노출 금지
+# 7. Public Internet 직접 노출 조건
 
-다음 구성은 지원하지 않는다.
+Plain HTTP Server, 인증 없는 Server, `private-network` profile Server를 public
+Internet에 노출해서는 안 된다.
 
 ```text
 Internet
     │
-    ▼
+    X
+    │
 http://server:8080
-    │
-    ▼
-Sync Server
 ```
 
-Application Level Authentication이 없기 때문에 Public Internet에 Plain HTTP Server를 직접 열어서는 안 된다.
-
----
-
-# 8. Public Access가 필요한 경우
-
-VPN을 사용할 수 없는 환경에서는 선택적으로:
+`0.4.0`의 public 배포는 아래 구성을 모두 만족할 때만 지원한다.
 
 ```text
 Internet
     │
     ▼
-HTTPS Reverse Proxy
-    │
+TLS-terminating Gateway
+    │ HTTPS + rate limit + no token logging
     ▼
-Sync Server
+VaultDatum Server (public-token profile)
+    │ Authorization: Bearer <Vault token>
+    ▼
+Authoritative Vault
 ```
 
-구조를 사용할 수 있다.
-
-이 경우 최소한:
-
-```text
-HTTPS
-
-+
-
-간단한 Authentication
-```
-
-이 필요하다.
-
-구체적인 Public Authentication 방식은 MVP의 핵심 기능으로 정의하지 않는다.
-
-예를 들어 Reverse Proxy에서 Authentication을 처리하거나 단일 API Token을 사용할 수 있다.
+Gateway, DNS, certificate만 추가하고 Server를 인증 없이 여는 것은 지원하지 않는다.
+namespace, NetworkPolicy, 방화벽도 Vault token 인증의 대체 수단이 아니다.
 
 ---
 
-# 9. Application Authentication은 Optional
+# 8. Access Profile
 
-기본 Private VPN Deployment에서는 Sync Server에 별도의 Login System을 구현할 필요가 없다.
+각 Server instance는 시작할 때 하나의 access profile을 명시적으로 선택한다.
+요청 출발 IP, URL의 hostname, Gateway header를 보고 Server가 public/private 여부를
+추론해서는 안 된다.
 
-따라서 MVP의 Sync API는:
+| Profile | 허용 transport | Server access token | 사용처 |
+| --- | --- | --- | --- |
+| `private-network` | 보호된 VPN 안의 HTTP 또는 HTTPS | 없음 | 기존 home network 배포 |
+| `public-token` | HTTPS만 | Vault bearer token | 단일 개인 Vault의 public access |
 
-```text
-Trusted Private Network 내부 호출
+`private-network`이 default다. `public-token`은 non-empty Vault token file이 준비되지
+않으면 Server가 ready 상태가 되지 않아야 한다.
+
+Server 설정은 다음 논리 이름을 사용한다. 실제 token 값은 설정 파일이나 환경 변수에
+넣지 않고, `token-file`이 가리키는 read-only Secret volume에만 둔다.
+
+```yaml
+vaultdatum:
+  access-profile: private-network # 또는 public-token
+  auth:
+    token-file: /run/secrets/vaultdatum/access-token
 ```
 
-을 기본 Security Boundary로 간주한다.
+---
 
-향후 Public Service 또는 Multi-user Service로 확장할 경우 Authentication Layer를 추가한다.
+# 9. 0.4.0 Vault Access Token
+
+`public-token` profile은 user/password나 browser login 대신, operator가 장치에
+out-of-band로 전달하는 Vault bearer token을 사용한다. token 하나는 해당
+Server instance의 Vault 전체에 대한 read/write 권한을 가진다.
+
+```text
+token possession
+        =
+Vault access
+```
+
+따라서 Vault token은 다음 형식을 가진다.
+
+```text
+vd1_<256-bit-random-secret>
+```
+
+* secret은 cryptographically secure random source로 최소 256 bit를 생성한다.
+* token plaintext는 deployment repository 밖의 Kubernetes Secret 또는 동등한
+  protected file에만 둔다. Server는 시작 때 read-only file에서 읽어 constant-time
+  비교에만 사용하며 SQLite, Vault, log, metric, error response, diagnostic에 저장하지
+  않는다.
+* Kubernetes Secret은 public source repository에 넣지 않으며, Secret을 읽을 수 있는
+  RBAC principal을 Server workload와 필요한 operator로 제한한다.
+* token은 URL query, request body, filename, WebSocket URL에 넣지 않는다.
+
+HTTP Sync request는 정확히 한 개의 다음 header로 token을 전달한다.
+
+```text
+Authorization: Bearer vd1_...
+```
+
+HTTP bearer token은 TLS가 없으면 노출되므로 `public-token` client는 `https://`
+URL만 받아들인다. redirect가 다른 origin으로 Authorization header를 전달하게 해서는
+안 된다.
+
+### Provision, rotation, revocation
+
+operator가 token을 한 번 생성해 Secret volume으로 mount하고, 신뢰할 수 있는
+out-of-band channel로 각 Obsidian 장치에 전달한다. public HTTP API에는 registration,
+token creation, token listing, password reset endpoint가 없다.
+
+`0.4.0` token은 Vault 전체에서 공유한다. 분실하거나 노출이 의심되면 새 token으로
+Secret을 교체하고 Pod를 restart한다. 그 시점부터 이전 token은 모두 무효화되며 각
+장치에는 새 token을 다시 입력해야 한다. 이는 장치별 권한 취소보다 단순한 개인 Vault
+운영 모델이다. per-device token, 사용자/조직 권한, folder scope, anonymous share
+link는 이번 버전에서 제공하지 않는다.
 
 ---
 
@@ -615,7 +659,7 @@ SQLite Locking
 
 * Server는 startup recovery가 끝나기 전 Sync 요청을 받지 않는다.
 * `/health/live`와 `/health/ready`의 의미는 [07 API Specification](./07_api-specification.md)과 [11 Observability and Operations](./11_observability-and-operations.md)을 따른다.
-* Log에는 콘텐츠나 credential을 남기지 않는다. 필요한 필드와 rotation은 [11 Observability and Operations](./11_observability-and-operations.md)을 따른다.
+* Log에는 콘텐츠나 Vault token을 남기지 않는다. 필요한 필드와 rotation은 [11 Observability and Operations](./11_observability-and-operations.md)을 따른다.
 * Backup은 Vault Filesystem과 SQLite Sync State를 함께 다루며, 방법과 복구 절차는 [11 Observability and Operations](./11_observability-and-operations.md)을 따른다.
 * 배포 설정은 최소 `DATA_ROOT`, listen address/port, maximum upload size, logging level을 별도 instance configuration으로 제공한다. 이는 동기화되거나 Vault에 저장되는 설정이 아니다.
 
@@ -625,7 +669,7 @@ SQLite Locking
 
 # 25. 권장 개인용 구성
 
-초기 버전의 권장 구성은 다음 하나로 단순화한다.
+`private-network` profile의 권장 구성은 다음과 같다.
 
 ```text
 Home Server
@@ -643,7 +687,77 @@ Sync Server
     └── VPN Network에서만 접근
 ```
 
-이 환경에서는 다음 기능을 구현하지 않는다.
+이 환경에서는 Vault bearer token을 추가로 요구하지 않는다. 단, public endpoint와
+같은 instance 또는 같은 Service를 공유해서는 안 된다.
+
+---
+
+# 26. Public Token 구성
+
+`public-token` profile은 개인 Vault 하나를 Internet에서 사용할 때의 최소 구성이다.
+
+```text
+Obsidian Client
+    │ HTTPS / WSS
+    │ Authorization: Bearer Vault token
+    ▼
+Public Gateway
+    │ Cluster-local HTTP
+    ▼
+VaultDatum Server
+    │
+    ▼
+Dedicated PVC /data
+```
+
+public Gateway는 TLS를 종료하고, Server Service는 `ClusterIP`로 유지한다. Server의
+8080 port, PVC, SQLite는 public Service로 노출하지 않는다. Gateway가
+backend에 연결할 수 있는 source만 NetworkPolicy에서 허용하며, Client IP allow-list는
+보조 제어일 뿐 authentication의 대체가 아니다.
+
+공개 URL은 vault마다 독립된 hostname을 쓴다. 예를 들어 `second-brain` Vault는
+`https://second-brain.example.com`처럼 하나의 stable origin을 사용한다. URL 변경은
+새 Server instance 또는 다른 Vault로의 연결로 취급하며 Client가 기존 token을 자동
+전달해서는 안 된다.
+
+Gateway와 application log는 다음을 절대 기록하지 않는다.
+
+```text
+Authorization header
+
+Sec-WebSocket-Protocol의 realtime ticket
+
+Vault token plaintext
+```
+
+Gateway는 `Strict-Transport-Security`, `X-Content-Type-Options: nosniff`, 적절한
+request body 제한을 제공한다. Sync API는 browser website용 API가 아니므로 CORS를
+기본적으로 활성화하지 않는다.
+
+### WebSocket authentication
+
+browser-compatible WebSocket API는 HTTP Authorization header를 임의로 설정할 수
+없다. bearer token을 query parameter로 보내면 URL logging 위험이 있으므로
+사용하지 않는다.
+
+Client는 인증된 HTTPS 요청으로 `POST /api/v1/realtime-tickets`를 호출해 one-time
+ticket을 받고, 만료 전 한 번만 아래 subprotocol offer로 전달한다.
+
+```text
+Sec-WebSocket-Protocol: vaultdatum.v1, vaultdatum.ticket.<opaque-ticket>
+```
+
+Server는 정상 handshake에서 `vaultdatum.v1`만 선택하고 ticket을 echo하지 않는다.
+ticket은 최소 128 bit random value, 60초 이하의 만료, single-use를 가져야 한다. ticket은
+Server memory에만 존재하며 Pod restart와 token rotation 뒤에는 모두 무효다. ticket 발급
+또는 WebSocket 연결 실패는 동기화 correctness를
+바꾸지 않으며, Client는 기존 catch-up HTTP flow로 복구한다.
+
+---
+
+# 27. 0.4.0 범위 밖
+
+다음 기능은 `0.4.0`에 포함하지 않는다.
 
 ```text
 User Account
@@ -652,56 +766,32 @@ Password Login
 
 OAuth / OIDC
 
-Device Token 관리
-
-Token Rotation
-
 Public Registration
 
 Admin UI
 
-Certificate Management
+장치별 token 또는 개별 token 취소
+
+Server 자체의 certificate provisioning 및 renewal
+
+Multi-user / organization authorization
+
+Vault sharing 또는 folder-level permission
+
+Anonymous public link
 ```
+
+
+OIDC, mTLS, multi-user authorization처럼 다른 authentication mechanism을 더할 때도
+Sync operation의 base/revision/idempotency 규칙은 바뀌지 않아야 한다.
+
+public Gateway의 유효한 certificate는 0.4.0 배포의 필수 조건이다. 다만 certificate
+발급·갱신 자동화는 VaultDatum Server의 기능이 아니라 cluster 또는 Gateway 운영 계층의
+책임으로 남긴다.
 
 ---
 
-# 26. Security 확장은 나중에 추가한다
-
-향후 다음 요구가 생기면 Security Layer를 확장할 수 있다.
-
-```text
-Public Internet Service
-
-Multiple Users
-
-Vault Sharing
-
-Hosted SaaS
-
-Organization Deployment
-```
-
-이 경우:
-
-```text
-HTTPS
-
-Device Authentication
-
-User Authentication
-
-Authorization
-
-Credential Revocation
-```
-
-등을 별도 Architecture로 추가한다.
-
-Sync Protocol 자체는 이런 인증 방식에 의존하지 않도록 유지한다.
-
----
-
-# 27. Security Invariants
+# 28. Security Invariants
 
 ## Invariant 1 — Server Is Not Public by Default
 
@@ -715,7 +805,7 @@ MVP Sync Server는 Public Internet에 직접 노출하지 않는다.
 
 ---
 
-## Invariant 3 — Client ID Is Not a Credential
+## Invariant 3 — Client ID Is Not an Access Token
 
 `clientId`만 알고 있다고 Server 접근 권한이 생기지 않는다.
 
@@ -760,7 +850,29 @@ provisioning identity는 일치하며, 개인 Host 계정이나 해당 설치의
 
 ---
 
-# 28. 최종 구조
+## Invariant 10 — Public Access Is Explicitly Authenticated
+
+`public-token` profile의 Sync HTTP와 notification handshake는 HTTPS/WSS 위에서 유효한
+Vault token 또는 그것으로 발급한 one-time ticket을 검증한 뒤에만 처리한다.
+
+---
+
+## Invariant 11 — Tokens Never Enter URLs or Diagnostics
+
+Vault token plaintext와 realtime ticket은 URL, synchronized state, Vault
+content, log, metric, error response, diagnostic에 포함되지 않는다.
+
+---
+
+## Invariant 12 — Token Rotation Stops Old Access
+
+Secret 교체와 Server restart가 완료된 뒤 이전 Vault token과 이전 realtime ticket은 새
+HTTP 요청 또는 WebSocket handshake를 통과할 수 없다. 기존 WebSocket은 restart로 닫히며,
+correctness는 HTTP catch-up으로 유지한다.
+
+---
+
+# 29. Private Profile 최종 구조
 
 ```text
 Laptop ──────┐
@@ -778,8 +890,12 @@ Phone ───────┘                    │
                                sync.db
 ```
 
-이 Security / Deployment 모델의 핵심은:
+private profile의 핵심은:
 
 > **개인용 Sync Application이 자체 인증 플랫폼을 만드는 대신 Private Network를 신뢰 경계로 사용하고, Application은 Vault Path와 Data Integrity를 안전하게 처리하는 데 집중하는 것**
 
 이다.
+
+public-token profile은 이 private model을 대체하지 않는다. public Vault마다 별도 Server
+instance, PVC, hostname, token set을 두고 HTTPS와 application token을
+추가하는 확장이다.

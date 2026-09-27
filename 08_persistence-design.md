@@ -942,6 +942,8 @@ Sync Engine State
 ```text
 Server URL
 
+Vault access token (public-token profile only)
+
 Sync Enabled
 
 UI Preferences
@@ -1578,13 +1580,20 @@ Client가 종료되더라도 Merge Result를 다시 불러올 수 있어야 한�
 
 # 54. Client Settings와 Secret
 
-일반 설정은 Plugin Settings에 저장한다.
+일반 설정은 Plugin Settings에 저장한다. `0.4.0`의 Vault access token도 Desktop과
+Mobile에서 공통으로 동작해야 하므로 해당 Obsidian Vault의 Plugin Settings에
+client-local로 저장한다. token은 IndexedDB, replica/pending/artifact store, sync
+payload에 복제하지 않는다.
 
-하지만 Authentication Token과 같은 Secret이 필요해질 경우 일반 Plugin Data에 plaintext로 저장하지 않는 것을 원칙으로 한다.
+Obsidian Plugin Data API가 모든 지원 platform에서 OS-level secret store를 보장하지
+않으므로, 이 저장 방식은 device-at-rest protection을 보장한다고 주장하지 않는다.
+이는 이미 Local Vault 자체를 읽을 수 있는 attacker에 대한 새로운 보호 경계가 아니다.
+device 분실 또는 token 노출은 Server-side token rotation으로 처리한다.
 
-지원되는 환경에서는 Obsidian의 secure secret storage 기능 또는 외부 Authentication Layer를 사용한다.
-
-구체적인 인증 방식은 Security 문서에서 정의한다.
+향후 모든 지원 platform에 공통 secure secret storage가 제공되면 기존 settings에서
+migrate할 수 있다. 어느 경우에도 token plaintext는 log, diagnostic, notification,
+URL, clipboard helper에 저장하거나 출력하지 않는다. 구체적인 access lifecycle은
+[09 Security and Deployment](./09_security-and-deployment.md)를 따른다.
 
 ---
 

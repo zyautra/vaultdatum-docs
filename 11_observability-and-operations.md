@@ -111,7 +111,17 @@ reconciliation_start
 reconciliation_complete
 
 server_ready
+
+authentication_rejected
+
+token_rotated
+
+realtime_ticket_rejected
 ```
+
+authentication event에는 outcome만 기록할 수 있으며, Authorization header, Vault token,
+realtime ticket, Vault content는 기록하지 않는다. wrong token은 enumeration을 막기 위해
+raw token 또는 유사한 식별자를 남기지 않는다.
 
 ---
 
@@ -145,6 +155,8 @@ revision=501
 ```
 
 파일 Content 자체는 기록하지 않는다.
+
+Vault token은 단일 Vault access secret이므로 audit correlation key로 쓰지 않는다.
 
 ---
 
@@ -935,6 +947,30 @@ Server Recovery Error가 있는가?
 
 Disk가 가득 차지 않았는가?
 ```
+
+## 40.1 Public Token Operations
+
+`public-token` instance를 Internet에 열기 전에는 다음을 확인한다.
+
+```text
+Server profile = public-token
+
+Vault token이 read-only Secret file로 mount됨
+
+Public Gateway의 TLS certificate와 hostname이 유효함
+
+Server Service는 ClusterIP이며 Gateway 외 source가 NetworkPolicy로 차단됨
+
+HTTP와 direct Server port는 public exposure에 없음
+
+Gateway / Server log redaction이 Authorization과 ticket을 기록하지 않음
+```
+
+token rotation은 새 random token으로 Kubernetes Secret을 교체하고 Pod를 restart해
+수행한다. token은 생성 시 한 번만 사용자에게 전달하며 ticket, Secret file, database
+backup을 terminal log나 support bundle에 붙이지 않는다. rotation 뒤 이전 token으로 새
+Client HTTP request가 `401`을 받는지 확인하고, 관련 장치의 Pending 상태를 확인한 뒤
+새 token을 입력한다.
 
 ---
 

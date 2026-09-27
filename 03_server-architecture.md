@@ -1290,6 +1290,32 @@ Vault와 Sync State를 함께 보존해야 한다는 서버 요구사항만 이 
 
 Server의 입력 검증과 Vault Root 경계는 [09 Security and Deployment](./09_security-and-deployment.md)을 단일 기준으로 사용한다. 이 아키텍처의 책임은 검증된 요청만 Mutation 경로로 전달하고, `.obsidian/`을 포함한 제외 경로를 authoritative content로 취급하지 않는 것이다.
 
+`0.4.0`에서는 HTTP/WebSocket boundary 앞에 작은 `AccessAuthenticator`를 둔다.
+
+```text
+HTTP / WebSocket request
+        │
+        ▼
+AccessAuthenticator
+        │ AccessContext (profile)
+        ▼
+API Resource
+        │
+        ▼
+Sync Coordinator
+```
+
+`AccessAuthenticator`만 Authorization header parsing, configured Vault token의
+constant-time comparison, realtime ticket issue/consume을 수행한다. API Resource와 Sync
+Coordinator가 header 문자열이나 token plaintext를 받지 않는다. authenticated
+`AccessContext`는 profile 정보만 전달한다.
+
+Server configuration은 `private-network` 또는 `public-token` profile을 명시적으로
+선택한다. `public-token`은 non-empty Vault token file 없이는 ready가 될 수 없다. token
+plaintext를 environment variable, application log, exception message에 넣지 않고 Secret
+volume file에서 읽는다. health probe의 제한된 예외를 제외한 Sync API는 이 boundary를
+우회할 수 없다.
+
 ---
 
 ## 35. Server Observability

@@ -1508,7 +1508,11 @@ Endpoint:
 /api/v1/notifications
 ```
 
-연결 방식의 구체적인 Authentication Binding은 Security 문서에서 정의한다.
+`private-network` profile에서는 protected network connection으로 충분하다.
+`public-token` profile에서는 bearer token을 WebSocket URL에 넣지 않고
+one-time realtime ticket으로 handshake한다. ticket endpoint와 subprotocol contract는
+아래 `#61 Realtime Ticket` 및 [09 Security and
+Deployment](./09_security-and-deployment.md)를 따른다.
 
 ---
 
@@ -1679,21 +1683,25 @@ Authenticated Client
     └── permissions
 ```
 
-구체적인:
+`private-network` profile은 protected network를, `public-token` profile은 아래
+header를 사용한다.
 
 ```text
-VPN-only
-
-Bearer Token
-
-mTLS
-
-Reverse Proxy Authentication
+Authorization: Bearer vd1_<256-bit-random-secret>
 ```
 
-선택은 Security / Deployment 문서에서 정의한다.
+`public-token` profile에서 `/api/v1/**`의 Sync API와 ticket 발급 endpoint는 이
+header 없이는 처리하지 않는다. `/health/live`, `/health/ready`는 kubelet 같은
+local orchestrator probe를 위해 별도 운영 endpoint로 남지만, public Gateway route에
+노출해서는 안 된다.
 
-Sync API의 데이터 모델은 특정 인증 기술에 종속되지 않는다.
+Server는 누락된 Vault token에 `401`과 `WWW-Authenticate: Bearer realm="vaultdatum"`을
+반환한다. 잘못되었거나 교체된 token도 Vault 존재 여부, revision, path를
+드러내지 않는 `401`로 처리한다. `403`은 향후 scope authorization을 위한 상태이며
+0.4.0의 single-Vault token은 Vault 전체에 같은 권한을 가진다.
+
+Sync API의 동기화 데이터 모델은 특정 인증 기술에 종속되지 않는다. Vault token
+plaintext는 actor, change payload, SQLite, log에 넣어서는 안 된다.
 
 ---
 
@@ -1701,25 +1709,40 @@ Sync API의 데이터 모델은 특정 인증 기술에 종속되지 않는다.
 
 Request Body의 `clientId`만으로 Identity를 신뢰해서는 안 된다.
 
-인증 계층이 Client Identity를 제공하는 환경에서는:
-
-```text
-Authenticated Identity
-```
-
-와:
-
-```text
-Request clientId
-```
-
-가 일치하는지 확인한다.
-
-구체적인 Identity Binding 방식은 Security 문서에서 정의한다.
+0.4.0 Vault token은 Vault access를 증명할 뿐 `clientId`의 대체가 아니다. 동일 token을
+사용해도 각 Obsidian installation은 별도의 stable `clientId`를 유지한다. 이 규칙은
+token secret을 client identity처럼 사용하거나, `clientId`만으로 access를 허용하는 오류를
+막는다.
 
 ---
 
-# 61. Health Endpoint
+# 61. Realtime Ticket
+
+`public-token` client는 다음 endpoint에서 HTTP bearer authentication을 거친 뒤
+notification 전용 ticket을 발급받는다.
+
+```text
+POST /api/v1/realtime-tickets
+Authorization: Bearer vd1_...
+```
+
+성공 응답은 opaque ticket과 만료 시각만 포함한다. ticket은 60초 이하 유효하고 한 번만
+사용할 수 있으며, Server restart 또는 token rotation 뒤에는 사용할 수 없다. Server는
+ticket plaintext를 persistent storage나 log에 저장하지 않는다.
+
+Client는 다음 WebSocket subprotocol offer로만 ticket을 보낸다.
+
+```text
+Sec-WebSocket-Protocol: vaultdatum.v1, vaultdatum.ticket.<opaque-ticket>
+```
+
+정상 응답은 `vaultdatum.v1`만 선택한다. `ticket`을 URL query, WebSocket message,
+cookie에 넣지 않는다. authentication failure 또는 ticket expiry는 notification
+optimization 실패일 뿐 Sync correctness failure가 아니다.
+
+---
+
+# 62. Health Endpoint
 
 Container 환경 운영을 위해 Sync API와 별도로 최소한 다음 Health 개념을 제공할 수 있다.
 
@@ -1741,7 +1764,7 @@ Readiness는 Server Startup Recovery가 완료되기 전에는 성공해서는 �
 
 ---
 
-# 62. Readiness 의미
+# 63. Readiness 의미
 
 다음 상태에서는 Server가 Process로 살아 있어도 Ready가 아닐 수 있다.
 

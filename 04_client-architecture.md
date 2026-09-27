@@ -1061,7 +1061,26 @@ Client Sync Metadata는 synchronized content 및 사용자 설정과 분리해 d
 
 ## 33. Client Identity
 
-각 Client는 재시작에도 변하지 않는 Client Identity를 가진다. 이는 credential이 아니며 데이터 모델과 API 경계의 정의는 [06 Data Model](./06_data-model.md), 접근 제어와의 구분은 [09 Security and Deployment](./09_security-and-deployment.md)을 따른다.
+각 Client는 재시작에도 변하지 않는 Client Identity를 가진다. 이는 Vault access token이 아니며 데이터 모델과 API 경계의 정의는 [06 Data Model](./06_data-model.md), 접근 제어와의 구분은 [09 Security and Deployment](./09_security-and-deployment.md)을 따른다.
+
+---
+
+## 33.1 Public Vault Token
+
+`public-token` Server에 연결하는 Client는 Server URL과 별도로 Vault token을
+가진다. token은 `.obsidian/`의 plugin-local settings에만 보관하며 VaultDatum
+sync state, IndexedDB replica metadata, Pending Operation, diagnostic, clipboard helper에
+복제하지 않는다.
+
+Obsidian Mobile과 Desktop에 공통으로 쓸 수 있는 OS secure-storage API가 없으므로,
+plugin-local persistence가 device-at-rest encryption을 보장한다고 주장해서는 안 된다.
+device를 잃었거나 token 노출이 의심되면 Server의 Vault token을 교체하고 모든 장치에
+새 token을 다시 입력하는 것이 0.4.0의 복구 경계다.
+
+Transport는 token을 정규화한 configured HTTPS origin에만 `Authorization: Bearer`
+header로 붙인다. `http://` public URL, cross-origin redirect, token을 URL 또는
+request body에 넣는 동작은 거부한다. URL을 다른 origin으로 바꾸면 새 token을
+명시적으로 입력받아야 하며 기존 token을 자동 전송하지 않는다.
 
 ---
 
@@ -1096,6 +1115,11 @@ Sync Scheduler Retry
 
 로 처리한다.
 
+`public-token` transport는 모든 protected HTTP request에 bearer header를 붙이고,
+401을 retryable network failure로 취급하지 않는다. token 입력 또는 rotation이
+완료되기 전에는 Pending Operation을 durable하게 유지한다. header, token,
+realtime ticket은 log와 error object에 담지 않는다.
+
 ---
 
 ## 35. Notification Channel
@@ -1116,6 +1140,11 @@ Notification 자체를 Local Vault에 바로 적용하지 않는다.
 연결이 끊어져도 Client correctness에는 영향을 주지 않는다.
 
 Notification payload와 reconnect 계약은 [07 API Specification](./07_api-specification.md), correctness 규칙은 [02 Synchronization Protocol](./02_synchronization-protocol.md)을 따른다.
+
+`public-token` profile에서는 먼저 authenticated HTTP로 one-time ticket을 받고
+`vaultdatum.v1`과 ticket subprotocol offer로 WebSocket을 연다. browser WebSocket API에
+임의 Authorization header를 붙이거나 URL query에 token을 넣지 않는다. ticket
+발급 또는 socket 연결 실패는 다음 HTTP catch-up을 막지 않는다.
 
 ---
 
