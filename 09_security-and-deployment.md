@@ -257,8 +257,8 @@ Authorization: Bearer vd1_...
 ```
 
 HTTP bearer token은 TLS가 없으면 노출되므로 `public-token` client는 `https://`
-URL만 받아들인다. redirect가 다른 origin으로 Authorization header를 전달하게 해서는
-안 된다.
+URL만 받아들인다. Public Gateway는 인증된 sync request를 다른 origin으로 redirect해서는
+안 된다. hostname을 바꾸는 migration은 새 URL과 새 token을 명시적으로 배포하는 절차다.
 
 ### Provision, rotation, revocation
 

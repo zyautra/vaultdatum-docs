@@ -1078,9 +1078,10 @@ device를 잃었거나 token 노출이 의심되면 Server의 Vault token을 교
 새 token을 다시 입력하는 것이 0.4.0의 복구 경계다.
 
 Transport는 token을 정규화한 configured HTTPS origin에만 `Authorization: Bearer`
-header로 붙인다. `http://` public URL, cross-origin redirect, token을 URL 또는
-request body에 넣는 동작은 거부한다. URL을 다른 origin으로 바꾸면 새 token을
-명시적으로 입력받아야 하며 기존 token을 자동 전송하지 않는다.
+header로 붙인다. `http://` public URL, token을 URL 또는 request body에 넣는 동작은
+거부한다. Public Gateway route는 인증된 sync request를 다른 origin으로 redirect해서는
+안 된다. 사용자가 URL을 다른 origin으로 바꾸면 Client는 기존 token field를 비우고,
+새 token을 명시적으로 입력받아야 한다.
 
 ---
 
