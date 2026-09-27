@@ -248,6 +248,8 @@ vd1_<256-bit-random-secret>
   않는다.
 * Kubernetes Secret은 public source repository에 넣지 않으며, Secret을 읽을 수 있는
   RBAC principal을 Server workload와 필요한 operator로 제한한다.
+* non-root Pod에서는 Secret file을 `0440`으로 mount하고 runtime GID를 `fsGroup`으로
+  지정한다. `0400`인 root-owned Secret file은 non-root Server가 읽을 수 없다.
 * token은 URL query, request body, filename, WebSocket URL에 넣지 않는다.
 
 HTTP Sync request는 정확히 한 개의 다음 header로 token을 전달한다.
@@ -730,8 +732,10 @@ Sec-WebSocket-Protocol의 realtime ticket
 Vault token plaintext
 ```
 
-Gateway는 `Strict-Transport-Security`, `X-Content-Type-Options: nosniff`, 적절한
-request body 제한을 제공한다. Sync API는 browser website용 API가 아니므로 CORS를
+Gateway는 `Strict-Transport-Security`, `X-Content-Type-Options: nosniff`,
+`Cache-Control: no-store`를 제공하고 요청 속도를 제한한다. Server는 HTTP request body를
+9 MiB로 제한한다. Gateway에서 추가로 body buffering/size limit을 적용한다면 WebSocket
+upgrade 경로에는 적용하지 않는다. Sync API는 browser website용 API가 아니므로 CORS를
 기본적으로 활성화하지 않는다.
 
 ### WebSocket authentication
