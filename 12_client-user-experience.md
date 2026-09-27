@@ -234,7 +234,7 @@ network 요청을 보내거나 error 상태로 바꾸지 않는다.
 ```text
 Server URL field
 
-Vault access token field (when required)
+Vault access token field (optional; required by a public Vault)
 
 Test connection
 
@@ -266,8 +266,10 @@ scheduler를 깨운다. 서버가 일시적으로 닿지 않아도 URL은 저장
 
 ### 5.2 Public Vault token
 
-`public-token` Server는 Vault access token 없이는 연결할 수 없다. Client는 Server가
-`401` Bearer challenge를 반환하거나 사용자가 token을 입력했을 때 다음 field를 보인다.
+`public-token` Server는 Vault access token 없이는 연결할 수 없다. Client는 private
+network 설치에서도 같은 설정 화면을 쓸 수 있도록 다음 field를 항상 제공하되, token이
+없는 Server에는 비워 둘 수 있게 한다. Server가 `401` Bearer challenge를 반환하면 field를
+강조하고 `Authentication required` 상태를 표시한다.
 
 ```text
 Vault access token
