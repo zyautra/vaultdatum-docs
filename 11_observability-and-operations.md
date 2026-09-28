@@ -610,19 +610,11 @@ Migration Error를 무시하고 이전 Schema로 계속 실행하지 않는다.
 
 ---
 
-# 24. External Vault Modification
+# 24. Server Vault 직접 수정
 
-Server Vault를 외부 Tool이 직접 변경할 수 있다.
+서버 Vault는 Sync API를 통해서만 변경한다. SSH, Editor, IDE Workspace, Script, Filesystem Sync Tool 등으로 Server가 관리하는 Vault를 직접 수정하는 것은 지원하지 않는다. 쓰기 경계는 [03 Server Architecture](./03_server-architecture.md)의 26절을 단일 기준으로 사용한다.
 
-이 경우 File Watcher Event는 빠른 감지 수단이다.
-
-하지만 correctness는:
-
-```text
-Integrity Scan
-```
-
-으로 보완한다.
+콘텐츠를 추가하거나 바꾸려면 Client나 API 기반 도구로 Operation을 제출한다. 서버 Vault 디렉터리를 Editor Workspace에 넣거나 파일을 직접 복사하는 방식은 운영 절차로 사용하지 않는다.
 
 ---
 
@@ -644,37 +636,36 @@ Expected Present / Actual Missing
 Expected Hash / Actual Hash mismatch
 
 Unknown File discovered
+
+Entry Type mismatch
 ```
 
 등을 식별한다.
 
+Integrity Scan은 감지와 보고만 한다. Journal, Path State, Vault Filesystem을 변경하지 않는다. Server Startup과 운영자 요청 시 수행하며, 주기 실행은 선택이다.
+
 ---
 
-# 26. External Drift 처리
+# 26. Vault Drift 처리
 
-안전하게 해석 가능한 Drift는 새로운 Server Change로 편입할 수 있다.
+Drift를 발견하면 `external_drift_detected` Event로 경로와 차이 종류를 기록한다. Content는 기록하지 않는다.
 
-예:
+Drift는 새 Server Change로 편입하지 않는다. Drift가 있는 경로를 대상으로 하는 Mutation은 PREPARED Operation을 만들기 전에 `RECOVERY_REQUIRED`로 거부된다. 다른 경로의 동기화는 계속된다.
 
-```text
-A.md Hash changed externally
-```
-
-이면:
+운영자는 다음 중 하나로 해소한다.
 
 ```text
-SERVER_EXTERNAL MODIFY
+직접 수정이 실수였다
+  → Filesystem을 Path State가 기록한 내용으로 되돌린다
+
+직접 수정한 내용을 보존해야 한다
+  → 내용을 Vault 밖으로 옮기고 Path State가 기록한 상태로 되돌린 뒤
+    Sync API Operation으로 다시 제출한다
 ```
 
-Change로 기록할 수 있다.
+해소한 뒤 Integrity Scan을 다시 실행하여 Drift가 없는지 확인한다.
 
-자동으로 판단하기 위험한 상태는:
-
-```text
-RECOVERY_REQUIRED
-```
-
-또는 명시적인 운영자 확인 대상으로 둔다.
+Backup 복원은 34절에 따라 Vault와 Sync State를 같은 시점의 Snapshot으로 함께 복원한다. Vault만 따로 복원하면 Drift가 생긴다.
 
 ---
 

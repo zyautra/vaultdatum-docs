@@ -17,7 +17,7 @@
 * 서버 Crash 중 부분 적용 방지
 * Operation Retry
 * Delete / Rename / Move 처리
-* 서버 Vault의 외부 수정 감지
+* 서버 Vault 쓰기 경계와 불일치 감지
 * 서버 시작 시 Recovery
 * 동시 요청 처리
 * Persistent Storage 계약
@@ -58,6 +58,8 @@ Filesystem Document
 와 같은 이중 콘텐츠 모델을 만들지 않는다.
 
 사용자가 백업하거나 서버에서 Vault를 직접 확인했을 때 일반적인 Obsidian Vault 구조를 그대로 볼 수 있어야 한다.
+
+Filesystem이 콘텐츠의 원본이라는 것은 저장 형식에 대한 결정이다. 서버 Vault를 Sync API 밖에서 수정해도 된다는 의미가 아니다. 서버 Vault의 쓰기 경계는 아래 26절 Server Vault 쓰기 경계를 따른다.
 
 ### 2.2 Sync State는 별도의 durable metadata이다
 
@@ -928,7 +930,7 @@ Server는 API 요청을 받기 전에 Recovery를 완료해야 한다.
 
 4. Validate Vault vs File Index
 
-5. Resolve / Report Drift
+5. Report Drift
 
 6. Determine Current Revision
 
@@ -969,34 +971,15 @@ High Availability Server는 MVP 범위가 아니다.
 
 ---
 
-## 26. Server Vault 외부 수정
+## 26. Server Vault 쓰기 경계
 
-Server Vault는 일반 Filesystem이므로 이론적으로 다음과 같은 외부 수정이 발생할 수 있다.
-
-```text
-SSH
-
-Editor
-
-Script
-
-Backup Restore
-
-Administrator
-```
-
-Vault Filesystem이 콘텐츠의 authoritative source이므로 Server는 이러한 변경을 무조건 이전 상태로 되돌려서는 안 된다.
-
-하지만 외부 수정은 정상 mutation path를 우회하므로 Sync State와 불일치할 수 있다.
-
-따라서 다음 정책을 사용한다.
-
-### 26.1 정상 쓰기 경로
-
-정상 운영 중 동기화 대상 Vault 변경은 반드시 Server Mutation Engine을 통해 수행하는 것을 원칙으로 한다.
+서버 Vault는 Sync API를 통해서만 변경한다. Server Mutation Engine이 서버 Vault를 쓰는 유일한 주체이다.
 
 ```text
-Client
+Client / API-based Tool
+   │
+   ▼
+Sync API
    │
    ▼
 Mutation Engine
@@ -1005,11 +988,27 @@ Mutation Engine
 Vault
 ```
 
-직접 Filesystem Write는 권장하지 않는다.
+Server가 관리하는 Vault를 다음 방법으로 직접 수정하는 것은 지원하지 않는다. Server 실행 여부와 관계없다.
 
-### 26.2 External Drift
+```text
+SSH / Shell
 
-File Index가 알고 있는 상태와 실제 Vault Filesystem이 다르면 이를 **External Drift**라고 한다.
+Editor / IDE Workspace
+
+Script
+
+Filesystem Sync Tool
+
+Administrator Manual Edit
+```
+
+직접 수정은 Base Revision 검증, Conflict 감지, Change Journal 기록, Idempotency를 모두 우회한다. 서버가 직접 수정을 새 변경으로 편입하면 Client의 Pending 변경을 Conflict 없이 덮어쓸 수 있고, Volume 미마운트나 부분 복원이 대량 DELETE로 전파될 수 있다. 따라서 서버는 직접 수정을 Journal에 편입하지 않는다.
+
+운영자나 도구가 콘텐츠를 추가하거나 바꾸려면 Client처럼 Sync API의 Operation을 제출한다. Backup 복원은 Vault와 Sync State를 같은 시점의 Snapshot으로 함께 복원하는 운영 절차로만 수행한다. 절차는 [11 Observability and Operations](./11_observability-and-operations.md)을 따른다.
+
+### 26.1 Vault Drift
+
+File Index가 기록한 상태와 실제 Vault Filesystem이 다르면 이를 **Vault Drift**라고 한다.
 
 예:
 
@@ -1023,93 +1022,65 @@ Filesystem:
 A.md hash = BBB
 ```
 
-서버는 Filesystem의 BBB를 자동으로 AAA로 되돌리지 않는다.
+Drift는 정상적인 동기화 상태가 아니라 Integrity 결함이다. 서버는 Drift를 다음 중 어느 방식으로도 자동 해소하지 않는다.
 
-Vault Filesystem이 콘텐츠 원본이기 때문이다.
+* Filesystem의 BBB를 AAA로 되돌리기
+* BBB를 새 Revision으로 Journal에 편입하기
+* 이후 Mutation으로 BBB를 덮어쓰기
 
-### 26.3 External Change Import
+### 26.2 Mutation 전 검증
 
-안전하게 판단 가능한 External Drift는 새로운 Server Change로 Journal에 편입할 수 있다.
-
-예:
-
-```text
-1001 MODIFY A.md
-actor = SERVER_EXTERNAL
-```
-
-외부에서 삭제된 경우:
+Mutation Engine은 Operation을 PREPARED로 기록하기 전에 대상 경로의 Filesystem 상태가 File Index와 일치하는지 확인한다.
 
 ```text
-1002 DELETE B.md
-actor = SERVER_EXTERNAL
+CREATE        대상 경로에 Filesystem 항목이 없어야 한다
+MODIFY        현재 파일 Hash가 File Index와 같아야 한다
+DELETE        현재 파일 Hash가 File Index와 같아야 한다
+RENAME / MOVE Source Hash가 같고 Destination이 없어야 한다
 ```
 
-이후 Client들은 일반적인 Server Change와 동일하게 이를 Pull한다.
+일치하지 않으면 PREPARED Operation을 만들지 않고 요청을 `RECOVERY_REQUIRED`로 거부한다. Drift 때문에 Recovery가 해석할 수 없는 PREPARED Operation이 생기거나, 서버 재시작이 실패해서는 안 된다. Client는 해당 변경을 Pending으로 보존하고 나중에 다시 시도한다.
 
-### 26.4 External Modification의 한계
+### 26.3 Drift 해소
 
-Server가 Commit을 수행하는 정확한 순간에 외부 Process가 같은 파일을 수정하는 상황까지 완벽하게 지원하는 것은 MVP의 목표가 아니다.
+Drift는 운영자가 확인하여 해소한다.
 
-정상 운영에서는:
+* 직접 수정이 실수였다면 Filesystem을 File Index가 기록한 내용으로 되돌린다.
+* 직접 수정한 내용을 보존해야 한다면 Vault 밖으로 옮겨 File Index가 기록한 상태로 되돌린 뒤, 그 내용을 Sync API Operation으로 다시 제출한다.
 
-```text
-Server running
-    +
-Direct concurrent Vault modification
-
-= Unsupported
-```
-
-로 본다.
-
-Server는 가능한 경우 Drift를 탐지하고 안전하지 않은 상태에서는 자동으로 덮어쓰지 않는다.
+어느 경우에도 서버는 운영자 확인 없이 Content를 삭제하거나 덮어쓰지 않는다.
 
 ---
 
-## 27. Drift Detection
+## 27. Integrity Scan
 
-External Drift를 발견하기 위해 두 종류의 방법을 사용할 수 있다.
-
-### File Watcher
-
-실행 중 Filesystem 변경 이벤트를 감지한다.
-
-목적은 빠른 탐지이다.
-
-### Integrity Scan
-
-실제 Filesystem과 File Index를 비교한다.
+Integrity Scan은 실제 Vault Filesystem과 File Index를 비교하여 Drift를 **감지하고 보고만** 한다. Journal, File Index, Vault Filesystem을 변경하지 않는다.
 
 다음 시점에 수행할 수 있다.
 
 ```text
 Server Startup
 
-Explicit Reconcile
+Operator Request
 
-Watcher anomaly
-
-Periodic Check
+Periodic Check (선택)
 ```
 
-File Watcher 자체는 correctness mechanism이 아니다.
-
-Watcher 이벤트를 놓쳐도 Integrity Scan으로 복구할 수 있어야 한다.
-
-즉:
+감지 대상:
 
 ```text
-Watcher
-    =
-Notification / Optimization
+Expected Present / Actual Missing
 
-Integrity Reconciliation
-    =
-Correctness
+Expected Hash / Actual Hash mismatch
+
+Unknown File discovered
+
+Entry Type mismatch
 ```
 
-라는 동일한 설계 원칙을 사용한다.
+File Watcher는 사용하지 않는다. Drift를 새 변경으로 편입하지 않으므로 빠른 감지가 필요하지 않고, 감지는 Integrity Scan과 26.2의 Mutation 전 검증으로 충분하다.
+
+보고 형식과 운영 절차는 [11 Observability and Operations](./11_observability-and-operations.md)을 따른다.
 
 ---
 
@@ -1384,9 +1355,9 @@ Client에게 보이는 Vault 파일은 완전히 이전 Content이거나 완전�
 
 부분적으로 기록된 Content가 정상 상태로 노출되어서는 안 된다.
 
-### Invariant 10 — External Drift Is Never Silently Overwritten
+### Invariant 10 — Vault Writes Only Through the Sync API
 
-Server가 알지 못하는 Vault 변경을 발견한 경우 이전 File Index 상태를 기준으로 무조건 덮어쓰지 않는다.
+서버 Vault는 Sync API와 Mutation Engine을 통해서만 변경한다. Server가 알지 못하는 Vault 변경을 발견하면 되돌리거나, Journal에 편입하거나, 덮어쓰지 않고 Drift로 보고한다.
 
 ### Invariant 11 — Read Only Committed State
 

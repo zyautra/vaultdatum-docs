@@ -1144,17 +1144,7 @@ Committed Change Order
 
 # 19. Server Actor
 
-Change가 어디에서 발생했는지 진단할 수 있도록 Actor 정보를 가질 수 있다.
-
-예:
-
-```text
-CLIENT
-
-SERVER_EXTERNAL
-
-SYSTEM
-```
+Change가 어디에서 발생했는지 진단할 수 있도록 Actor 정보를 가진다.
 
 Client Mutation이면:
 
@@ -1163,31 +1153,27 @@ actorType = CLIENT
 actorClientId = C-1
 ```
 
-외부 Filesystem Drift를 Server가 Journal에 편입했다면:
-
-```text
-actorType = SERVER_EXTERNAL
-```
-
-로 표현할 수 있다.
+Protocol의 Actor Type에는 `SERVER_EXTERNAL`과 `SYSTEM`도 정의되어 있지만 현재 Server는 이를 기록하지 않는다. 특히 서버 Vault의 직접 수정은 Journal에 편입하지 않으므로 `SERVER_EXTERNAL` Change는 생성되지 않는다. 쓰기 경계는 [03 Server Architecture](./03_server-architecture.md)의 26절을 따른다.
 
 ---
 
-# 20. External Change도 Operation으로 표현한다
+# 20. 모든 Change는 Sync API Operation에서 나온다
 
-가능하면 Server 외부 변경을 Journal에 편입할 때도 Server-generated Operation ID를 생성한다.
+Committed Change는 모두 Sync API로 제출되어 Mutation Engine을 통과한 Operation의 결과이다.
 
 ```text
-External Drift
+Sync API Operation
       │
       ▼
-Server-generated Operation
+Mutation Engine
       │
       ▼
 Committed Change
 ```
 
-이를 통해 모든 committed mutation이 동일한 데이터 흐름을 가진다.
+서버 Vault의 직접 수정(Drift)은 Operation이 아니므로 Change를 만들지 않는다. Drift는 Integrity Scan이 보고하고 운영자가 해소한다.
+
+이를 통해 모든 committed mutation이 Base 검증, Idempotency, Recovery를 거치는 동일한 데이터 흐름을 가진다.
 
 ---
 
