@@ -614,7 +614,35 @@ Migration Error를 무시하고 이전 Schema로 계속 실행하지 않는다.
 
 서버 Vault는 Sync API를 통해서만 변경한다. SSH, Editor, IDE Workspace, Script, Filesystem Sync Tool 등으로 Server가 관리하는 Vault를 직접 수정하는 것은 지원하지 않는다. 쓰기 경계는 [03 Server Architecture](./03_server-architecture.md)의 26절을 단일 기준으로 사용한다.
 
-콘텐츠를 추가하거나 바꾸려면 Client나 API 기반 도구로 Operation을 제출한다. 서버 Vault 디렉터리를 Editor Workspace에 넣거나 파일을 직접 복사하는 방식은 운영 절차로 사용하지 않는다.
+콘텐츠를 추가하거나 바꾸려면 Client나 API 기반 도구로 Operation을 제출한다. 서버 Vault 디렉터리를 Editor Workspace에 넣거나 파일을 직접 복사하는 방식은 운영 절차로 사용하지 않는다. 유일한 예외는 새 서버로 이전할 때의 Initial Vault Import이다.
+
+## 24.1 다른 저장소에서 이전하기
+
+기존 Vault를 VaultDatum으로 옮길 때는 서버 복제만으로 초기 상태를 만든다. 규칙은 [03 Server Architecture](./03_server-architecture.md)의 26.4절을 단일 기준으로 사용한다.
+
+```text
+1. 비어 있는 새 Data Root를 준비한다
+
+2. 기존 Vault 내용을 /data/vault 아래에 복사한다
+   (.obsidian/, .git/ 등 이름이 `.`으로 시작하는 항목, Symlink,
+    최대 Content 크기를 넘는 파일은 제외한다)
+
+3. VAULTDATUM_INITIAL_IMPORT=true로 서버를 시작한다
+
+4. 시작이 거부되면 로그에 보고된 경로를 정리하고 3을 반복한다
+
+5. 가져온 Change 수와 Current Revision을 로그와 /api/v1/vault로 확인한다
+
+6. 플래그를 끄고 서버를 다시 시작한다
+
+7. Client를 연결한다
+```
+
+가져오기는 하나의 Transaction이므로 실패하면 아무것도 기록되지 않는다. 플래그를 켠 채 이미 Revision이 있는 서버를 시작하면 시작이 거부되므로, 가져오기가 끝나면 반드시 플래그를 끈다.
+
+기존 Local Vault를 가진 Client는 일반 Initial Bootstrap을 따른다. 서버와 같은 파일은 Replica로 기록되고, 내용이 다른 파일은 Conflict가 되며 어느 쪽도 덮어쓰지 않는다.
+
+로그에는 경로, 사유, 개수, Revision만 기록하고 Content는 기록하지 않는다.
 
 ---
 

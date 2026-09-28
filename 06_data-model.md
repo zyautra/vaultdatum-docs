@@ -1153,13 +1153,19 @@ actorType = CLIENT
 actorClientId = C-1
 ```
 
-Protocol의 Actor Type에는 `SERVER_EXTERNAL`과 `SYSTEM`도 정의되어 있지만 현재 Server는 이를 기록하지 않는다. 특히 서버 Vault의 직접 수정은 Journal에 편입하지 않으므로 `SERVER_EXTERNAL` Change는 생성되지 않는다. 쓰기 경계는 [03 Server Architecture](./03_server-architecture.md)의 26절을 따른다.
+Initial Vault Import로 기존 자료를 편입한 Change는:
+
+```text
+actorType = SERVER_EXTERNAL
+```
+
+로 기록한다. `SERVER_EXTERNAL`은 이 경우에만 사용한다. 운영 중 서버 Vault의 직접 수정은 Journal에 편입하지 않으므로 `SERVER_EXTERNAL` Change를 만들지 않는다. `SYSTEM`은 Protocol에 예약되어 있으며 현재 기록하지 않는다. 쓰기 경계와 Initial Vault Import는 [03 Server Architecture](./03_server-architecture.md)의 26절을 따른다.
 
 ---
 
 # 20. 모든 Change는 Sync API Operation에서 나온다
 
-Committed Change는 모두 Sync API로 제출되어 Mutation Engine을 통과한 Operation의 결과이다.
+Committed Change는 Sync API로 제출되어 Mutation Engine을 통과한 Operation의 결과이다. 유일한 예외는 빈 Journal에 대한 Initial Vault Import이며, 이 Change도 서버가 생성한 Operation ID를 가진다.
 
 ```text
 Sync API Operation
@@ -1171,7 +1177,7 @@ Mutation Engine
 Committed Change
 ```
 
-서버 Vault의 직접 수정(Drift)은 Operation이 아니므로 Change를 만들지 않는다. Drift는 Integrity Scan이 보고하고 운영자가 해소한다.
+운영 중 서버 Vault의 직접 수정(Drift)은 Operation이 아니므로 Change를 만들지 않는다. Drift는 Integrity Scan이 보고하고 운영자가 해소한다.
 
 이를 통해 모든 committed mutation이 Base 검증, Idempotency, Recovery를 거치는 동일한 데이터 흐름을 가진다.
 

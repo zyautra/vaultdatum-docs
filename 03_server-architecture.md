@@ -928,15 +928,17 @@ Server는 API 요청을 받기 전에 Recovery를 완료해야 한다.
 
 3. Recover Incomplete Operations
 
-4. Validate Vault vs File Index
+4. Initial Vault Import (명시적으로 요청한 경우만)
 
-5. Report Drift
+5. Validate Vault vs File Index
 
-6. Determine Current Revision
+6. Report Drift
 
-7. Start API
+7. Determine Current Revision
 
-8. Start Notification Service
+8. Start API
+
+9. Start Notification Service
 ```
 
 Recovery가 완료되지 않은 상태에서 Client mutation을 받아서는 안 된다.
@@ -1002,7 +1004,7 @@ Filesystem Sync Tool
 Administrator Manual Edit
 ```
 
-직접 수정은 Base Revision 검증, Conflict 감지, Change Journal 기록, Idempotency를 모두 우회한다. 서버가 직접 수정을 새 변경으로 편입하면 Client의 Pending 변경을 Conflict 없이 덮어쓸 수 있고, Volume 미마운트나 부분 복원이 대량 DELETE로 전파될 수 있다. 따라서 서버는 직접 수정을 Journal에 편입하지 않는다.
+직접 수정은 Base Revision 검증, Conflict 감지, Change Journal 기록, Idempotency를 모두 우회한다. 서버가 직접 수정을 새 변경으로 편입하면 Client의 Pending 변경을 Conflict 없이 덮어쓸 수 있고, Volume 미마운트나 부분 복원이 대량 DELETE로 전파될 수 있다. 따라서 서버는 직접 수정을 Journal에 편입하지 않는다. 유일한 예외는 Journal이 비어 있는 새 Vault에 기존 자료를 한 번 들여오는 26.4 Initial Vault Import이다.
 
 운영자나 도구가 콘텐츠를 추가하거나 바꾸려면 Client처럼 Sync API의 Operation을 제출한다. Backup 복원은 Vault와 Sync State를 같은 시점의 Snapshot으로 함께 복원하는 운영 절차로만 수행한다. 절차는 [11 Observability and Operations](./11_observability-and-operations.md)을 따른다.
 
@@ -1049,6 +1051,46 @@ Drift는 운영자가 확인하여 해소한다.
 * 직접 수정한 내용을 보존해야 한다면 Vault 밖으로 옮겨 File Index가 기록한 상태로 되돌린 뒤, 그 내용을 Sync API Operation으로 다시 제출한다.
 
 어느 경우에도 서버는 운영자 확인 없이 Content를 삭제하거나 덮어쓰지 않는다.
+
+### 26.4 Initial Vault Import
+
+다른 저장소에서 VaultDatum으로 이전할 때는 기존 Vault 파일을 새 Server Data Root의 Vault 디렉터리에 복사한 뒤, 서버가 이를 한 번에 Journal에 편입할 수 있다. 이것이 Filesystem 상태를 Change로 편입하는 유일한 경로이며, 결과 Change의 Actor는 `SERVER_EXTERNAL`이다.
+
+**실행 조건**
+
+* 운영자가 `VAULTDATUM_INITIAL_IMPORT=true`로 서버를 시작한 경우에만 수행한다. 자동으로 수행하지 않는다.
+* Current Revision이 0이고 File Index와 Operation 기록이 비어 있어야 한다.
+* 조건을 만족하지 않는데 플래그가 켜져 있으면 서버는 시작을 거부한다. 이미 사용 중인 Vault에서 플래그가 남아 있거나, Sync State를 잃은 뒤 운영자 확인 없이 새 계보로 다시 가져오는 일을 막기 위해서다.
+* Vault 디렉터리가 비어 있으면 잘못된 Volume일 가능성이 높으므로 시작을 거부한다.
+
+**사전 검사**
+
+가져오기 전에 Vault 전체를 검사한다. Symlink는 따라가지 않는다. 다음 항목이 하나라도 있으면 아무것도 기록하지 않고 시작을 거부하며, 해당 경로와 사유를 보고한다.
+
+```text
+이름이 `.`으로 시작하는 파일 또는 디렉터리 (.obsidian/, .git/ 등)
+
+Symlink, Socket 등 일반 파일이나 디렉터리가 아닌 항목
+
+설정된 최대 Content 크기를 넘는 파일
+
+Sync Path 규칙을 위반하는 경로
+
+읽을 수 없는 항목
+```
+
+일부만 가져오면 남은 항목이 이후 Integrity Scan에서 계속 Drift로 보고되므로, 부분 가져오기는 하지 않는다. 운영자가 항목을 정리한 뒤 다시 시작한다.
+
+**편입**
+
+* 일반 파일은 경로 순서대로 각각 하나의 `CREATE` Change가 된다.
+* 파일이 없는 빈 디렉터리는 Directory `CREATE` Change가 된다. 파일을 포함한 디렉터리는 암묵적 부모이므로 별도 Change를 만들지 않는다.
+* Operation ID는 서버가 생성한다.
+* 해시 계산 전후에 파일 크기와 수정 시각이 달라지면 가져오기를 중단한다.
+* 전체 편입은 하나의 SQLite Transaction으로 Commit한다. 도중에 실패하거나 Process가 종료되면 아무것도 기록되지 않으며, 같은 조건으로 다시 실행할 수 있다.
+* Vault Filesystem은 변경하지 않는다.
+
+가져오기가 끝나면 운영자는 플래그를 끄고 서버를 다시 시작한다. 이후의 직접 수정은 26.1의 Drift로 취급한다. 운영 절차는 [11 Observability and Operations](./11_observability-and-operations.md)을 따른다.
 
 ---
 
@@ -1357,7 +1399,7 @@ Client에게 보이는 Vault 파일은 완전히 이전 Content이거나 완전�
 
 ### Invariant 10 — Vault Writes Only Through the Sync API
 
-서버 Vault는 Sync API와 Mutation Engine을 통해서만 변경한다. Server가 알지 못하는 Vault 변경을 발견하면 되돌리거나, Journal에 편입하거나, 덮어쓰지 않고 Drift로 보고한다.
+서버 Vault는 Sync API와 Mutation Engine을 통해서만 변경한다. Server가 알지 못하는 Vault 변경을 발견하면 되돌리거나, Journal에 편입하거나, 덮어쓰지 않고 Drift로 보고한다. 유일한 예외는 빈 Journal에 대한 명시적 Initial Vault Import이다.
 
 ### Invariant 11 — Read Only Committed State
 
