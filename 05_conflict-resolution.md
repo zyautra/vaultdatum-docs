@@ -50,7 +50,7 @@ New Authoritative State
 * Resolution Commit과 완료 조건
 * Conflict History
 
-자동 3-way merge는 초기 버전의 필수 기능으로 다루지 않는다.
+VaultDatum는 사용자 확인 없이 자동 3-way merge를 하지 않는다.
 
 ---
 
@@ -70,7 +70,7 @@ Current Server State
 Local State
 ```
 
-초기 버전에서 Base Content 전체를 항상 보존할 필요는 없지만, Conflict를 이해하고 해결하는 데 필요한 정보는 유지해야 한다.
+Base Content 전체를 항상 보존할 필요는 없지만, Conflict를 이해하고 해결하는 데 필요한 정보는 유지해야 한다.
 
 ---
 
@@ -373,7 +373,7 @@ Modify Conflict 예:
 
 # 6. Resolution Action 모델
 
-초기 버전은 다음 Resolution Action을 기본으로 지원한다.
+다음 Resolution Action을 지원한다.
 
 ```text
 USE_SERVER
@@ -519,7 +519,7 @@ Server = D
 
 # 8. Manual Merge UX
 
-`0.3.1`의 responsive Manual Merge workspace 설계는
+Manual Merge 작업 공간의 화면 설계는
 [12 Client User Experience](./12_client-user-experience.md)의 Markdown 수동 병합
 작업 공간을 따른다. 이 절은 Manual Merge가 지켜야 할 conflict와 durable
 resolution 의미를 계속 정의한다.
@@ -549,7 +549,7 @@ Kubernetes는 ...              Kubernetes는 ...
 
 사용자는 결과 문서를 직접 편집할 수 있다.
 
-초기 버전에서는 완전한 IDE 수준 Merge Editor를 요구하지 않는다.
+완전한 IDE 수준 Merge Editor는 요구하지 않는다.
 
 다음 정도면 충분하다.
 
@@ -1108,19 +1108,9 @@ Conflicts (27)
 
 사용자가 27개의 파일을 하나씩 처리해야 하는 UX는 좋지 않을 수 있다.
 
-초기 버전에서는 최소한 Type별 또는 Folder별로 Conflict를 묶어 표시할 수 있다.
+Conflict 목록은 Type별 또는 Folder별로 묶어 표시할 수 있다.
 
-향후 다음과 같은 Bulk Action을 고려할 수 있다.
-
-```text
-선택한 파일 모두 Server 사용
-
-선택한 파일 모두 Local 사용
-```
-
-하지만 Bulk Local Apply는 많은 Server 변경을 발생시키므로 반드시 사용자에게 영향 범위를 보여줘야 한다.
-
-복잡한 Bulk Resolution은 MVP 필수 기능으로 하지 않는다.
+여러 Conflict를 한 번에 해결하는 Bulk Action은 제공하지 않는다. 각 Conflict는 사용자가 하나씩 확인하고 해결한다.
 
 ---
 
@@ -1227,9 +1217,9 @@ Revision, Hash, Tombstone, Operation ID를 사용자가 알아야 Conflict를 �
 
 ---
 
-# 26. Initial MVP Scope
+# 26. 지원 범위
 
-초기 Conflict Resolution 기능은 다음 Type을 우선 지원한다.
+다음 Conflict Type을 지원한다.
 
 ```text
 MODIFY vs MODIFY
@@ -1257,18 +1247,6 @@ Keep Deleted
 Restore Local
 
 Keep Both
-```
-
-다음 기능은 후순위로 둘 수 있다.
-
-```text
-Automatic 3-way Merge
-
-Semantic Markdown Merge
-
-Bulk Smart Resolution
-
-Automatic Rename Conflict Resolution
 ```
 
 ---

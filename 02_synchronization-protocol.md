@@ -660,7 +660,7 @@ RENAME vs MODIFY
 
 로 처리한다.
 
-초기 VaultDatum는 복잡한 Rename Conflict를 자동 해결하려 하지 않는다.
+VaultDatum는 Rename Conflict를 자동 해결하지 않는다.
 
 ---
 

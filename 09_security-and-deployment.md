@@ -6,7 +6,7 @@
 
 이 문서는 접근 경계와 배포 계약의 기준 문서다. Server 내부 mutation/recovery 구조는 [03 Server Architecture](./03_server-architecture.md), API로 노출되는 보안·health 계약은 [07 API Specification](./07_api-specification.md), 시작·백업·로그·상태 점검 절차는 [11 Observability and Operations](./11_observability-and-operations.md)에서만 정의한다.
 
-초기 사용 환경은 다음을 전제로 한다.
+사용 환경은 다음을 전제로 한다.
 
 ```text
 Single User
@@ -16,20 +16,20 @@ Home Server
 Desktop / Laptop / Mobile Clients
 ```
 
-`0.3.x`의 기본 원칙은 다음과 같다.
+기본 배포 원칙은 다음과 같다.
 
 > **Sync Server를 Public Internet에 직접 노출하지 않고, 승인된 개인 Device만 접근할 수 있는 Private Network 안에서 운영한다.**
 
-`0.4.0`은 이 private 배포 모델을 유지하면서, 단일 개인 Vault를 public Internet에서
-사용할 수 있는 별도 access profile을 추가한다. public profile은 HTTPS와 Vault별
+이 private 배포 모델과 별도로, 단일 개인 Vault를 public Internet에서
+사용할 수 있는 access profile을 제공한다. public profile은 HTTPS와 Vault별
 bearer token을 함께 사용하며, 익명 접근, 사용자 가입, password login, 여러
-사용자 권한 모델을 추가하지 않는다.
+사용자 권한 모델을 두지 않는다.
 
 ---
 
 # 2. Security 범위
 
-초기 버전에서 보호해야 하는 것은 다음 정도다.
+보호해야 하는 것은 다음과 같다.
 
 ```text
 승인되지 않은 외부 접근 방지
@@ -140,7 +140,7 @@ Vault access token
 
 # 6. VPN 내부 Transport
 
-VPN 자체에서 Encryption을 제공하므로 MVP에서는 VPN 내부에서:
+VPN 자체에서 Encryption을 제공하므로 VPN 내부에서는:
 
 ```text
 HTTP
@@ -177,7 +177,7 @@ Internet
 http://server:8080
 ```
 
-`0.4.0`의 public 배포는 아래 구성을 모두 만족할 때만 지원한다.
+public 배포는 아래 구성을 모두 만족할 때만 지원한다.
 
 ```text
 Internet
@@ -223,7 +223,7 @@ vaultdatum:
 
 ---
 
-# 9. 0.4.0 Vault Access Token
+# 9. Vault Access Token
 
 `public-token` profile은 user/password나 browser login 대신, operator가 장치에
 out-of-band로 전달하는 Vault bearer token을 사용한다. token 하나는 해당
@@ -268,7 +268,7 @@ operator가 token을 한 번 생성해 Secret volume으로 mount하고, 신뢰�
 out-of-band channel로 각 Obsidian 장치에 전달한다. public HTTP API에는 registration,
 token creation, token listing, password reset endpoint가 없다.
 
-`0.4.0` token은 Vault 전체에서 공유한다. 분실하거나 노출이 의심되면 새 token으로
+Vault token은 Vault 전체에서 공유한다. 분실하거나 노출이 의심되면 새 token으로
 Secret을 교체하고 Pod를 restart한다. 그 시점부터 이전 token은 모두 무효화되며 각
 장치에는 새 token을 다시 입력해야 한다. 이는 장치별 권한 취소보다 단순한 개인 Vault
 운영 모델이다. per-device token, 사용자/조직 권한, folder scope, anonymous share
@@ -344,7 +344,7 @@ Client가 전달한 문자열을 그대로 Filesystem Path에 연결하지 않�
 
 # 13. Symbolic Link
 
-MVP에서는 Symbolic Link를 Sync 대상으로 지원하지 않는다.
+Symbolic Link는 Sync 대상으로 지원하지 않는다.
 
 이유:
 
@@ -364,7 +364,7 @@ Server가 Symlink를 발견하면 따라가지 않는다.
 
 # 14. 지원 Filesystem Entry
 
-초기 버전은 다음만 지원한다.
+다음만 지원한다.
 
 ```text
 Regular File
@@ -500,7 +500,7 @@ PVC
 
 에 Persistent Volume을 Mount한다.
 
-초기 Server는:
+Server는:
 
 ```text
 replicas = 1
@@ -637,7 +637,7 @@ replicas = 1
 
 # 23. Network Filesystem
 
-초기 버전에서는 NFS 같은 Network Filesystem을 기본 지원 Storage로 간주하지 않는다.
+NFS 같은 Network Filesystem은 지원 Storage로 간주하지 않는다.
 
 Server Persistence는 다음 semantics를 필요로 한다.
 
@@ -759,9 +759,9 @@ Server memory에만 존재하며 Pod restart와 token rotation 뒤에는 모두 
 
 ---
 
-# 27. 0.4.0 범위 밖
+# 27. 제공하지 않는 접근 기능
 
-다음 기능은 `0.4.0`에 포함하지 않는다.
+다음 기능은 제공하지 않는다.
 
 ```text
 User Account
@@ -786,10 +786,10 @@ Anonymous public link
 ```
 
 
-OIDC, mTLS, multi-user authorization처럼 다른 authentication mechanism을 더할 때도
-Sync operation의 base/revision/idempotency 규칙은 바뀌지 않아야 한다.
+Sync operation의 base/revision/idempotency 규칙은 authentication mechanism과
+독립적이다.
 
-public Gateway의 유효한 certificate는 0.4.0 배포의 필수 조건이다. 다만 certificate
+public Gateway의 유효한 certificate는 public 배포의 필수 조건이다. 다만 certificate
 발급·갱신 자동화는 VaultDatum Server의 기능이 아니라 cluster 또는 Gateway 운영 계층의
 책임으로 남긴다.
 
@@ -799,7 +799,7 @@ public Gateway의 유효한 certificate는 0.4.0 배포의 필수 조건이다. 
 
 ## Invariant 1 — Server Is Not Public by Default
 
-MVP Sync Server는 Public Internet에 직접 노출하지 않는다.
+Sync Server는 Public Internet에 직접 노출하지 않는다. public 배포도 HTTPS Gateway와 Vault token을 거쳐서만 접근한다.
 
 ---
 
@@ -823,7 +823,7 @@ MVP Sync Server는 Public Internet에 직접 노출하지 않는다.
 
 ## Invariant 5 — Symlinks Are Not Followed
 
-MVP에서는 Symlink를 통해 외부 Filesystem에 접근하지 않는다.
+Symlink를 통해 외부 Filesystem에 접근하지 않는다.
 
 ---
 

@@ -1,8 +1,7 @@
 # VaultDatum Client User Experience
 
-> 상태: `0.3.0`을 위한 설계 초안이며, `0.3.1`의 Markdown 수동 병합 작업 공간을
-> 포함한다. 이 문서는 Obsidian Client가 사용자에게 동기화 상태와 복구 동작을
-> 어떻게 보여 주는지를 정의한다.
+> 이 문서는 Obsidian Client가 사용자에게 동기화 상태와 복구 동작을 어떻게 보여
+> 주는지를 정의한다.
 
 ## 1. 문서 목적
 
@@ -292,7 +291,7 @@ token이 없는 public Server는 `Authentication required` 상태로 표시하�
 
 #### 최초 연결 절차
 
-`0.4.0`은 사용자 가입이나 로그인 화면을 제공하지 않는다. Vault 소유자(운영자)가
+VaultDatum는 사용자 가입이나 로그인 화면을 제공하지 않는다. Vault 소유자(운영자)가
 배포 시 Vault token을 생성하고 Secret으로 Server에 mount한 뒤, URL과 token을 신뢰할 수
 있는 비공개 채널(예: password manager 또는 end-to-end encrypted messenger)로 장치
 사용자에게 전달한다. token을 URL query나 QR code에 넣지 않는다.
@@ -571,8 +570,7 @@ last write wins
 작업 공간이다. conflict 판정, durable resolution, Server commit의 의미는 계속
 [05 Conflict Resolution](./05_conflict-resolution.md)을 따른다.
 
-`0.3.0`의 단순한 세 텍스트 영역은 두 내용을 안전하게 보였지만 비교하기에는
-불편했다. `0.3.1`은 사용자가 다음 세 가지를 바로 알 수 있게 한다.
+작업 공간은 사용자가 다음 세 가지를 바로 알 수 있게 한다.
 
 ```text
 Server 버전에 무엇이 있었는가?
@@ -729,7 +727,7 @@ Save merged result → Saving… (disabled)
 | 같은 묶음의 행을 다르게 선택 | 첫 행은 Server, 다음 행은 이 기기로 결과를 조합하며 원본은 바뀌지 않는다. |
 | 직접 편집 후 행 선택 | 결과 재구성 전에 확인하며 원본은 바뀌지 않는다. |
 | 저장 성공 | 결과를 Server 확정으로 잘못 표시하지 않고 durable queue에 넣는다. |
-| 저장 실패 또는 앱 종료 | `0.3.0`의 durable resolution 규칙으로 결과를 복구할 수 있다. |
+| 저장 실패 또는 앱 종료 | durable resolution 규칙으로 결과를 복구할 수 있다. |
 | Markdown 이외 또는 binary conflict | 수동 병합을 제공하지 않고 상태에 맞는 해소 Action만 제공한다. |
 
 ---
@@ -859,11 +857,11 @@ VaultDatum: Review conflicts (2)
 
 ---
 
-## 12. `0.3.0` 범위와 비범위
+## 12. UX 범위
 
-### 12.1 필수 범위
+### 12.1 제공하는 UX
 
-`0.3.0` Client UX는 최소 다음을 제공한다.
+Client UX는 최소 다음을 제공한다.
 
 ```text
 단일 Sync Overview와 Mobile 접근 경로
@@ -887,17 +885,11 @@ redacted Copy diagnostic details
 색에만 의존하지 않는 Desktop/Mobile 접근성
 ```
 
-이 범위는 현재 HTTP protocol을 바꾸지 않는 Client UX 개선을 우선한다. 새 API가
-필요해지면 [07 API Specification](./07_api-specification.md)과 OpenAPI contract를
-별도 변경으로 검토한다.
+### 12.2 제공하지 않는 UX
 
-### 12.2 이번 범위에서 제외하는 것
-
-다음은 UX가 좋아 보여도 `0.3.0`의 약속으로 만들지 않는다.
+다음은 UX가 좋아 보여도 제공하지 않는다.
 
 ```text
-Markdown 자동 3-way merge
-
 mobile의 항상 실행되는 background sync
 
 서버 또는 VPN의 인증 체계 변경

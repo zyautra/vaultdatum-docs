@@ -96,9 +96,9 @@ Sync State
 
 ---
 
-## 3. 초기 저장소 선택
+## 3. 저장소 선택
 
-초기 버전에서는 Sync State 저장소로 **SQLite**를 사용한다.
+Sync State 저장소로 **SQLite**를 사용한다.
 
 선택 이유:
 
@@ -787,7 +787,7 @@ RECOVERY_REQUIRED
 
 Global Revision은 전체 Server에 대한 하나의 순서를 가져야 한다.
 
-초기 버전에서는 Commit Finalization을 논리적으로 직렬화한다.
+Commit Finalization은 논리적으로 직렬화한다.
 
 ```text
 Client A ─┐
@@ -947,7 +947,7 @@ Recovery가 완료되지 않은 상태에서 Client mutation을 받아서는 안
 
 ## 25. Single Server Instance
 
-초기 버전에서는 하나의 Vault를 동시에 하나의 Server Process만 관리한다.
+하나의 Vault는 동시에 하나의 Server Process만 관리한다.
 
 ```text
 Vault
@@ -969,7 +969,7 @@ Server 시작 시 Instance Lock을 획득한다.
 * Filesystem Mutation 경쟁
 * Recovery 충돌
 
-High Availability Server는 MVP 범위가 아니다.
+High Availability Server는 제품 목표가 아니다([00 Product Specification](./00_product-specification.md)의 비목표).
 
 ---
 
@@ -1303,7 +1303,7 @@ Vault와 Sync State를 함께 보존해야 한다는 서버 요구사항만 이 
 
 Server의 입력 검증과 Vault Root 경계는 [09 Security and Deployment](./09_security-and-deployment.md)을 단일 기준으로 사용한다. 이 아키텍처의 책임은 검증된 요청만 Mutation 경로로 전달하고, `.obsidian/`을 포함한 제외 경로를 authoritative content로 취급하지 않는 것이다.
 
-`0.4.0`에서는 HTTP/WebSocket boundary 앞에 작은 `AccessAuthenticator`를 둔다.
+HTTP/WebSocket boundary 앞에는 작은 `AccessAuthenticator`를 둔다.
 
 ```text
 HTTP / WebSocket request
@@ -1407,7 +1407,7 @@ Client-facing Server API는 내부 PREPARED/APPLYING 상태를 정상적인 auth
 
 ### Invariant 12 — One Server Owns One Vault
 
-초기 버전에서는 하나의 synchronized Vault를 동시에 하나의 Server Instance만 관리한다.
+하나의 synchronized Vault는 동시에 하나의 Server Instance만 관리한다.
 
 ### Invariant 13 — Persistent Data Lives Outside Container Lifecycle
 

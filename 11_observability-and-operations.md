@@ -57,7 +57,7 @@ Observability는:
 
 # 3. 필요한 Observability 수준
 
-MVP에서는 다음 세 가지면 충분하다.
+다음 세 가지로 충분하다.
 
 ```text
 Structured Log
@@ -851,8 +851,6 @@ Server Start
 
 이다.
 
-향후 Online Consistent Backup이 필요하면 별도로 설계한다.
-
 ---
 
 # 35. Disk Usage
@@ -947,7 +945,7 @@ Last Error
 
 ---
 
-# 40. MVP Operations Checklist
+# 40. Operations Checklist
 
 정상 운영 시 다음 정도만 확인할 수 있으면 충분하다.
 
@@ -963,6 +961,8 @@ Pending이 계속 쌓이고 있지 않은가?
 Conflict가 존재하는가?
 
 Server Recovery Error가 있는가?
+
+시작 로그에 external_drift_detected가 있는가?
 
 Disk가 가득 차지 않았는가?
 ```

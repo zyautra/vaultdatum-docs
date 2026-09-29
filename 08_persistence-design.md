@@ -657,7 +657,7 @@ API에서 Manifest는 여러 HTTP 요청에 걸쳐 같은 Snapshot을 제공해�
 
 단순히 `path_state`를 page별로 직접 조회하면 Manifest 생성 중 Server 변경이 발생하여 서로 다른 시점의 State가 섞일 수 있다.
 
-따라서 MVP에서는 Manifest를 materialize한다.
+따라서 Manifest는 materialize한다.
 
 ---
 
@@ -997,7 +997,7 @@ ClientStore Interface
 IndexedDB
 ```
 
-향후 Storage Backend 변경이 Sync Algorithm을 변경하지 않도록 한다.
+Storage Backend를 바꾸더라도 Sync Algorithm이 바뀌지 않도록 한다.
 
 ---
 
@@ -1238,9 +1238,9 @@ Attachment Support가 추가되면 Binary Blob을 저장할 수 있도록 Model�
 
 # 42. Large Binary Artifact
 
-대용량 Attachment를 IndexedDB에 장기간 복제하는 정책은 MVP Markdown Sync의 필수 요구사항이 아니다.
+대용량 Attachment를 IndexedDB에 장기간 복제하지 않는다. Artifact는 전송과 적용에 필요한 동안만 보관한다.
 
-Attachment 단계에서는 다음을 별도로 검증해야 한다.
+Artifact 저장은 다음을 만족해야 한다.
 
 ```text
 Mobile Storage Quota
@@ -1252,15 +1252,7 @@ Crash Durability
 Temporary Artifact GC
 ```
 
-따라서 Persistence Abstraction은 Artifact Backend를 교체할 수 있어야 한다.
-
-```text
-ArtifactStore Interface
-       │
-       ├── IndexedDB
-       │
-       └── Future Backend
-```
+Artifact 저장은 ClientStore 경계 뒤에 두어 Sync Algorithm과 분리한다.
 
 ---
 
@@ -1580,7 +1572,7 @@ Client가 종료되더라도 Merge Result를 다시 불러올 수 있어야 한�
 
 # 54. Client Settings와 Secret
 
-일반 설정은 Plugin Settings에 저장한다. `0.4.0`의 Vault access token도 Desktop과
+일반 설정은 Plugin Settings에 저장한다. Vault access token도 Desktop과
 Mobile에서 공통으로 동작해야 하므로 해당 Obsidian Vault의 Plugin Settings에
 client-local로 저장한다. token은 IndexedDB, replica/pending/artifact store, sync
 payload에 복제하지 않는다.
@@ -1590,8 +1582,7 @@ Obsidian Plugin Data API가 모든 지원 platform에서 OS-level secret store�
 이는 이미 Local Vault 자체를 읽을 수 있는 attacker에 대한 새로운 보호 경계가 아니다.
 device 분실 또는 token 노출은 Server-side token rotation으로 처리한다.
 
-향후 모든 지원 platform에 공통 secure secret storage가 제공되면 기존 settings에서
-migrate할 수 있다. 어느 경우에도 token plaintext는 log, diagnostic, notification,
+token plaintext는 log, diagnostic, notification,
 URL, clipboard helper에 저장하거나 출력하지 않는다. 구체적인 access lifecycle은
 [09 Security and Deployment](./09_security-and-deployment.md)를 따른다.
 
@@ -1651,7 +1642,7 @@ Committed Staging Artifact
 Committed Recovery Artifact
 ```
 
-다음은 초기 버전에서 aggressive GC하지 않는다.
+다음은 aggressive GC하지 않는다.
 
 ```text
 Server Change Journal

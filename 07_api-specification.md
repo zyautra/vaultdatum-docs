@@ -1605,7 +1605,7 @@ maxOperationContentSize
 
 을 반환한다.
 
-MVP에서 Resumable Multipart Upload는 필수 기능으로 하지 않는다.
+Upload는 한 번의 요청으로 완료한다. 중단된 Upload는 같은 Operation으로 처음부터 다시 전송한다.
 
 ---
 
@@ -1622,8 +1622,8 @@ content payload
 
 가 존재하지 않는다.
 
-초기 버전의 Directory Operation은 비어 있는 Directory에만 적용한다. Recursive
-Directory Delete처럼 다수 Path를 암묵적으로 변경하는 API는 지양한다.
+Directory Operation은 비어 있는 Directory에만 적용한다. Recursive
+Directory Delete처럼 다수 Path를 암묵적으로 변경하는 API는 두지 않는다.
 
 Client는 필요한 경우 명시적인 Path Change를 생성한다.
 
@@ -1697,8 +1697,8 @@ local orchestrator probe를 위해 별도 운영 endpoint로 남지만, public G
 
 Server는 누락된 Vault token에 `401`과 `WWW-Authenticate: Bearer realm="vaultdatum"`을
 반환한다. 잘못되었거나 교체된 token도 Vault 존재 여부, revision, path를
-드러내지 않는 `401`로 처리한다. `403`은 향후 scope authorization을 위한 상태이며
-0.4.0의 single-Vault token은 Vault 전체에 같은 권한을 가진다.
+드러내지 않는 `401`로 처리한다. Vault token은 Vault 전체에 같은 권한을 가지므로
+Server는 `403`을 반환하지 않는다. `403`은 Protocol에 예약된 상태다.
 
 Sync API의 동기화 데이터 모델은 특정 인증 기술에 종속되지 않는다. Vault token
 plaintext는 actor, change payload, SQLite, log에 넣어서는 안 된다.
@@ -1709,7 +1709,7 @@ plaintext는 actor, change payload, SQLite, log에 넣어서는 안 된다.
 
 Request Body의 `clientId`만으로 Identity를 신뢰해서는 안 된다.
 
-0.4.0 Vault token은 Vault access를 증명할 뿐 `clientId`의 대체가 아니다. 동일 token을
+Vault token은 Vault access를 증명할 뿐 `clientId`의 대체가 아니다. 동일 token을
 사용해도 각 Obsidian installation은 별도의 stable `clientId`를 유지한다. 이 규칙은
 token secret을 client identity처럼 사용하거나, `clientId`만으로 access를 허용하는 오류를
 막는다.
@@ -1835,8 +1835,6 @@ SET my cursor = 1000
 과 같은 API를 필수로 두지 않는다.
 
 Client가 자신의 Cursor를 durable하게 관리한다.
-
-향후 Server가 Client Progress를 관찰하거나 Journal GC에 사용하고 싶다면 별도 optional acknowledgement API를 추가할 수 있다.
 
 ---
 

@@ -458,7 +458,7 @@ Explicit Sync
 Recovery
 ```
 
-대규모 Vault에서는 전체 Scan 비용이 있으므로 향후 최적화할 수 있지만 correctness를 위해 Full Local Reconciliation 경로는 항상 존재해야 한다.
+Scan 비용을 줄이는 최적화를 하더라도 correctness를 위해 Full Local Reconciliation 경로는 항상 존재해야 한다.
 
 ---
 
@@ -1075,7 +1075,7 @@ sync state, IndexedDB replica metadata, Pending Operation, diagnostic, clipboard
 Obsidian Mobile과 Desktop에 공통으로 쓸 수 있는 OS secure-storage API가 없으므로,
 plugin-local persistence가 device-at-rest encryption을 보장한다고 주장해서는 안 된다.
 device를 잃었거나 token 노출이 의심되면 Server의 Vault token을 교체하고 모든 장치에
-새 token을 다시 입력하는 것이 0.4.0의 복구 경계다.
+새 token을 다시 입력하는 것이 복구 경계다.
 
 Transport는 token을 정규화한 configured HTTPS origin에만 `Authorization: Bearer`
 header로 붙인다. `http://` public URL, token을 URL 또는 request body에 넣는 동작은

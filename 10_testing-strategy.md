@@ -62,7 +62,7 @@ Full Reconciliation
 
 테스트 코드 자체가 제품보다 복잡해지지 않도록 한다.
 
-다음은 MVP에서 지양한다.
+다음은 지양한다.
 
 ```text
 과도한 Mock 기반 Unit Test
@@ -80,7 +80,7 @@ Full Reconciliation
 
 # 3. 테스트 구조
 
-MVP의 테스트는 세 Layer로 제한한다.
+테스트는 세 Layer로 구성한다.
 
 ```text
 1. Small Unit Tests
@@ -833,8 +833,8 @@ Server UNKNOWN + Local file 또는 empty directory
 - 제한을 넘는 Local attachment는 upload하지 않고 사용자에게 제외 상태가 보인다.
 - 하나의 경로가 Conflict여도 다른 `UNKNOWN` Local 경로의 CREATE는 계속 진행된다.
 - Bootstrap 완료 metadata는 모든 경로가 Replica, Conflict, Pending, 또는 제외 상태로 durable 분류된 뒤에만 기록된다.
-- 기존 `0.1.0` Replica의 offline MODIFY 또는 DELETE는 manifest가 동일 Base State를 보일 때 Pending으로 유지되며, 초기 import Conflict가 되지 않는다.
-- 기존 `0.1.0`의 in-flight operation은 Change Journal에 같은 Operation ID가 있으면 own commit으로 복구한 뒤 fresh manifest를 통합한다. 이후 다른 Client의 변경도 정상적으로 적용되어야 한다.
+- Bootstrap 완료 metadata 없이 남아 있는 기존 Replica의 offline MODIFY 또는 DELETE는 manifest가 동일 Base State를 보일 때 Pending으로 유지되며, 초기 import Conflict가 되지 않는다.
+- Bootstrap 완료 metadata가 없는 Client의 in-flight operation은 Change Journal에 같은 Operation ID가 있으면 own commit으로 복구한 뒤 fresh manifest를 통합한다. 이후 다른 Client의 변경도 정상적으로 적용되어야 한다.
 
 ---
 
@@ -1032,7 +1032,7 @@ Conflict와 Pending이 없으면 결국 Client는 Server State로 수렴한다.
 
 # 17. Release Gate
 
-MVP Release 전에 최소 다음 Scenario를 통과해야 한다.
+모든 Release는 최소 다음 Scenario를 통과해야 한다.
 
 ```text
 1. Basic Create / Modify / Delete
@@ -1074,39 +1074,17 @@ MVP Release 전에 최소 다음 Scenario를 통과해야 한다.
 19. Conflict Resolution
 
 20. `.obsidian/` Exclusion
+
+21. Vault Drift Rejects Mutation Before PREPARED
+
+22. Initial Vault Import Is All-or-Nothing
 ```
 
-이 Scenario들이 실제 Component를 사용해 안정적으로 반복 실행되면 MVP 수준의 Sync Correctness는 충분히 검증된 것으로 본다.
+이 Scenario들이 실제 Component를 사용해 안정적으로 반복 실행되면 Sync Correctness는 충분히 검증된 것으로 본다.
 
-`0.4.0 public-token` release는 위 Sync Scenario에 더해 `#15 Public Access Security`의
+`public-token` 배포를 포함하는 Release는 위 Sync Scenario에 더해 `#15 Public Access Security`의
 모든 scenario를 실제 TLS Gateway, NetworkPolicy, token Secret volume과 함께
 통과해야 한다. mock Authorization filter만 통과한 결과는 public release gate가 아니다.
-
----
-
-# 18. Future Testing
-
-시스템 규모와 복잡도가 커졌을 때 다음을 추가할 수 있다.
-
-```text
-Property-based Testing
-
-Model-based Testing
-
-Long-running Random Operation Test
-
-Large Vault Performance Test
-
-Protocol Compatibility Matrix
-
-Network Fault Simulation
-
-Multi-version Client / Server Test
-```
-
-MVP에서는 이러한 Test Infrastructure를 먼저 만들지 않는다.
-
-필요성이 실제로 발생했을 때 도입한다.
 
 ---
 

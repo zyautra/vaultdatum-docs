@@ -1,6 +1,8 @@
 # VaultDatum 제품 사양서
 
 > 이 문서는 제품 요구사항과 전역 불변조건의 기준 문서다. 구현·프로토콜·저장소·운영의 세부 규칙은 아래 전문 문서에서만 정의하며, 이 문서에 같은 규칙을 다시 쓰지 않는다.
+>
+> 모든 설계 문서는 제품이 항상 만족해야 하는 목표 상태만 기술한다. 버전별 범위와 변경 이력은 릴리즈 태그와 커밋에서 관리하고, 아직 약속하지 않은 개선 후보는 [13 Backlog](./13_backlog.md)에 둔다.
 
 | 관심사                                            | 기준 문서                                                                                                                                                                                                                                    |
 | ------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -10,6 +12,7 @@
 | Conflict UX, 논리 상태, HTTP 계약                 | [05 Conflict Resolution](./05_conflict-resolution.md), [06 Data Model](./06_data-model.md), [07 API Specification](./07_api-specification.md)                                                                                                |
 | Client 설정, 상태 표시, 첫 동기화, 사용자 복구 UX | [12 Client User Experience](./12_client-user-experience.md)                                                                                                                                                                                  |
 | 영속성, 배포 보안, 검증, 운영                     | [08 Persistence Design](./08_persistence-design.md), [09 Security and Deployment](./09_security-and-deployment.md), [10 Testing Strategy](./10_testing-strategy.md), [11 Observability and Operations](./11_observability-and-operations.md) |
+| 약속하지 않은 개선 후보                           | [13 Backlog](./13_backlog.md)                                                                                                                                                                                                                |
 
 ## 1. 제품 개요
 
@@ -189,9 +192,7 @@ VaultDatum가 해당 변경을 Authoritative Vault에 반영한 후 모바일 �
 
 VaultDatum는 나중에 업로드된 파일을 단순히 최신 파일이라는 이유로 덮어써서는 안 된다.
 
-초기 버전에서는 이러한 상황을 **충돌로 감지하는 것**을 우선한다.
-
-자동 병합은 기본 요구사항이 아니다.
+VaultDatum는 이러한 상황을 **충돌로 감지**하고 두 내용을 모두 보존한다. 어떤 내용을 사용할지는 사용자가 결정한다.
 
 ### 5.5 삭제와 오프라인 장치
 
@@ -260,9 +261,7 @@ VaultDatum는 최소 다음 변경을 구분할 수 있어야 한다.
 - Rename
 - Move
 
-여러 파일에 발생한 관련 변경이 하나의 작업으로 처리될 필요가 있는 경우 향후 하나의 논리적인 변경 단위로 다룰 수 있다.
-
-초기 버전에서는 개별 파일의 안전한 동기화를 우선한다.
+각 변경은 파일 또는 빈 디렉터리 하나를 단위로 안전하게 동기화한다. Rename과 Move는 원본과 대상 경로를 하나의 변경으로 확정한다.
 
 ---
 
@@ -276,13 +275,11 @@ VaultDatum는 서버에 존재하는 새로운 변경을 오래된 클라이언�
 
 ### 8.2 Markdown 충돌
 
-초기 버전의 필수 기능은 자동 Merge가 아니라 충돌 감지이다.
+충돌이 발생하면 서버 버전과 로컬 버전이 모두 유실되지 않아야 한다.
 
-충돌이 발생하면 최소한 서버 버전과 로컬 버전이 모두 유실되지 않아야 한다.
+사용자는 충돌 사실을 확인하고 서버 버전, 로컬 버전, 두 파일 모두 보존, 또는 수동 병합 중에서 최종 내용을 결정할 수 있어야 한다.
 
-사용자는 충돌 사실을 확인하고 어떤 내용을 최종적으로 사용할지 결정할 수 있어야 한다.
-
-3-way merge와 같은 자동 또는 반자동 병합 기능은 향후 버전에서 추가할 수 있다.
+VaultDatum는 사용자 확인 없이 Markdown 내용을 자동 병합하지 않는다.
 
 ### 8.3 Binary 충돌
 
@@ -459,7 +456,7 @@ Authentication
 VaultDatum Server
 ```
 
-VPN을 사용하지 않는 환경에서는 VaultDatum 또는 VaultDatum 앞단의 별도 구성요소가 적절한 통신 보호와 접근 통제를 제공해야 한다. `0.4.0`의 개인용 public
+VPN을 사용하지 않는 환경에서는 VaultDatum 또는 VaultDatum 앞단의 별도 구성요소가 적절한 통신 보호와 접근 통제를 제공해야 한다. 개인용 public
 profile은 HTTPS와 운영자가 provision한 Vault bearer token을 사용한다. 이것은 여러
 사용자 계정 또는 공개 가입 기능을 뜻하지 않는다.
 
@@ -510,90 +507,63 @@ VaultDatum Server의 Vault는 별도의 백업 정책을 사용할 수 있어야
 
 ---
 
-## 15. 초기 대상 사용자
+## 15. 대상 사용자
 
-초기 버전의 대상은 다음 사용자이다.
+VaultDatum의 대상은 다음 사용자이다.
 
 > 한 명의 사용자가 개인 홈서버를 운영하면서 데스크탑, 노트북, 모바일 등의 여러 장치에서 하나의 Obsidian Vault를 사용하고 싶은 경우.
 
-초기 제품은 조직용 협업 도구를 목표로 하지 않는다.
+VaultDatum는 조직용 협업 도구를 목표로 하지 않는다.
 
 ---
 
-## 16. MVP
+## 16. 제품 기능
 
-### MVP 1 — Reliable Markdown Sync
+VaultDatum는 다음 기능을 제공한다. 각 기능의 세부 규칙은 기준 문서를 따른다.
 
-목표:
-
-> 여러 장치가 네트워크 상태나 앱 종료 여부와 관계없이 Markdown Vault를 안전하게 동기화할 수 있다.
-
-지원:
+**구성요소와 플랫폼**
 
 - VaultDatum Server
-- VaultDatum for Obsidian
-- Desktop Obsidian
-- Android Obsidian
-- Markdown Create
-- Markdown Modify
-- Markdown Delete
-- 기본 Rename/Move
-- 자동 동기화
-- 수동 동기화
-- 오프라인 변경 보존
-- 증분 동기화
-- 기본 충돌 감지
-- 충돌 시 양쪽 데이터 보존
-- 연결 복구 후 Catch-up
+- VaultDatum for Obsidian (Desktop, Android)
+
+**동기화**
+
+- 파일과 빈 디렉터리의 Create, Modify, Delete, Rename, Move
+- Markdown, 이미지, PDF 등 모든 일반 파일
+- 자동 동기화와 수동 동기화
+- 오프라인 변경 보존과 재연결 후 Catch-up
+- Change Journal 기반 증분 동기화와 Manifest 기반 전체 재조정
+- 실시간 변경 알림 (정확성에는 필요하지 않음)
 - `.obsidian/` 제외
-- VPN 기반 배포 지원
-- Sync Status
 
-### MVP 2 — Attachment & Conflict UX
+**충돌**
 
-지원:
+- 수정, 삭제, Rename/Move 충돌 감지와 양쪽 데이터 보존
+- 서버 버전 사용, 로컬 버전 적용, 삭제 유지, 로컬 복원, 두 파일 모두 보존, Markdown 수동 병합
 
-- Conflict UI 개선
-- 이미지 및 일반 Attachment
-- Binary Conflict 처리
-- 삭제 충돌 강화
-- Rename/Move 충돌 강화
-- 대량 변경 Catch-up 최적화
+**안전성과 복구**
 
-### MVP 3 — Advanced Reconciliation & Recovery
+- 재시도해도 중복 적용되지 않는 변경
+- 서버 장애 중 부분 적용 방지와 재시작 복구
+- 서버 Vault 무결성 검사와 Drift 보고
+- 기존 Vault를 새 서버로 옮기는 일회성 초기 가져오기
 
-지원:
+**사용자 경험**
 
-- Markdown 3-way merge
-- 자동 또는 반자동 충돌 해결
-- 여러 파일 변경의 논리적 단위 보장
-- 장애 중 부분 적용 방지
-- 긴 오프라인 기간에 대한 안정성 강화
-- 서버 장애 복구 강화
-- Vault 무결성 검사
-- 대규모 Vault 성능 개선
+- 동기화 상태, 마지막 동기화 시각, Pending/Conflict 수 표시
+- 연결 확인, 일시 정지, 동기화 추적 초기화, 진단 정보 복사
 
-### 0.4.0 — Public Personal Vault Access
+**배포와 접근**
 
-지원:
-
-- public Vault별 HTTPS endpoint
-- 운영자가 provision한 Vault bearer token
-- Vault token 교체로 전체 access 무효화
-- authenticated HTTP Sync API
-- one-time ticket을 사용하는 authenticated notification WebSocket
-- public Gateway, NetworkPolicy, token redaction 배포 계약
-
-`0.4.0`의 인증·배포·token lifecycle 세부 규칙은 [09 Security and
-Deployment](./09_security-and-deployment.md)를 따른다.
+- VPN 등 사설 네트워크 배포
+- HTTPS와 운영자가 발급한 Vault token을 사용하는 개인용 public 배포
 
 ---
 
-## 17. MVP에서 제외하는 기능
+## 17. 비목표 (Non-goals)
 
-초기 VaultDatum는 다음 문제를 해결하지 않는다.
+VaultDatum는 다음을 목표로 하지 않는다.
 
-- Markdown 자동 3-way merge
 - 여러 사용자의 공동 편집
 - Google Docs 수준의 실시간 동시 편집
 - Character 단위 실시간 Merge

@@ -852,17 +852,15 @@ Commit되지 않은 Operation은 Change를 만들지 않는다.
 
 ---
 
-## 14.1 MVP 관계
+## 14.1 Operation과 Change의 관계
 
-초기 버전에서는 대부분:
+하나의 Operation은 하나의 Change를 만든다.
 
 ```text
 1 Operation
     →
 1 Change
 ```
-
-이다.
 
 예:
 
@@ -872,7 +870,7 @@ MODIFY request
 MODIFY change
 ```
 
-향후 Multi-file Transaction을 지원하면 하나의 Operation 또는 Transaction이 여러 Change를 만들 수 있으므로 논리 모델 자체를 반드시 영구적인 1:1 관계로 제한하지 않는다.
+Rename과 Move처럼 여러 경로에 영향을 주는 변경도 하나의 Change 안에 여러 Effect로 기록한다.
 
 ---
 
@@ -2273,7 +2271,7 @@ Artifact Store는 비교적 큰 Content Snapshot과 Temporary File을 담당한�
 
 ## 48.1 Server Path Tombstone
 
-초기 버전에서는 삭제된 Path State를 장기간 유지한다.
+삭제된 Path State는 장기간 유지한다.
 
 개인 Vault 규모에서는 correctness를 우선한다.
 
@@ -2281,13 +2279,13 @@ Artifact Store는 비교적 큰 Content Snapshot과 Temporary File을 담당한�
 
 ## 48.2 Server Change Journal
 
-초기 버전에서는 가능한 한 장기간 보존한다.
+Change Journal은 가능한 한 장기간 보존한다.
 
 ---
 
 ## 48.3 Server Operation Record
 
-초기 버전에서는 COMMITTED Operation 역시 장기간 보존한다.
+COMMITTED Operation 역시 장기간 보존한다.
 
 이유:
 
@@ -2307,7 +2305,7 @@ same operationId retry
 
 ## 48.4 Client Replica Tombstone
 
-초기 버전에서는 `DELETED` Replica Entry를 자동 제거하지 않는다.
+`DELETED` Replica Entry는 자동 제거하지 않는다.
 
 오래된 파일이 다시 나타났을 때:
 
