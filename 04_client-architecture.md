@@ -1449,3 +1449,19 @@ Server State
 ```
 
 이다.
+
+---
+
+## 48. 파일 되돌리기
+
+사용자는 파일 하나를 Content History에 남아 있는 과거 버전으로 되돌릴 수 있다. 직전 버전만이 아니라 내용이 남아 있는 모든 Revision이 대상이다.
+
+1. File History API로 파일 기록을 읽는다. 이 기능은 Online에서만 사용할 수 있다.
+2. 사용자가 고른 버전의 내용을 받아 Hash를 검증한다.
+3. [07 API Specification](./07_api-specification.md) 74.3절의 MODIFY 또는 Explicit Restore CREATE를 Pending Operation으로 durable하게 기록한다.
+4. 일반 Pending처럼 제출한다. 앱이 종료돼도 기존 Pending 복구 규칙으로 이어서 진행한다.
+
+같은 경로에 이 기기의 Pending 변경이나 Conflict가 있으면 되돌리기를 시작하지 않는다. 되돌리기 Operation이 Base 불일치로 거부되면 일반 Conflict로 다룬다. 되돌리기라는 이유로 다른 장치의 변경을 덮어쓰지 않는다.
+
+삭제된 경로를 되살릴 때 로컬에 같은 경로의 파일이 이미 있으면 되돌리기를 시작하지 않는다.
+

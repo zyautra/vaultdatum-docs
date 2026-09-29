@@ -122,6 +122,8 @@ Revision 1003의 A.md Content 다운로드
 
 Change Stream을 이용해 어떤 State 변화가 있었는지 판단하고, 실제 파일 Content가 필요하면 **현재 Authoritative Path State를 조건부로 다운로드**한다.
 
+과거 내용은 사용자가 파일 하나를 되돌릴 때만 74절의 File History API로 읽는다. 동기화는 File History API를 사용하지 않는다.
+
 ---
 
 # 3. API Version
@@ -353,6 +355,8 @@ HISTORY_NOT_AVAILABLE
 MANIFEST_EXPIRED
 
 RECOVERY_REQUIRED
+
+CONTENT_NOT_RETAINED
 
 SERVER_NOT_READY
 
@@ -2028,7 +2032,7 @@ Client가 예상한 Path Revision과 Hash가 현재 Server State와 일치할 �
 
 ## Invariant 5 — No Historical Content Assumption
 
-Client correctness는 Server가 모든 과거 Revision의 File Content를 보존한다고 가정하지 않는다.
+Client의 동기화 correctness는 Server가 과거 Revision의 File Content를 보존한다고 가정하지 않는다. Content History는 파일 되돌리기를 위한 것이며 보존 기간이 지나면 사라질 수 있다.
 
 ---
 
@@ -2082,7 +2086,7 @@ Client API는 SQLite, Staging, Recovery 등의 Server 내부 Storage 구조에 �
 
 # 73. 전체 API Surface
 
-초기 Sync API는 다음 정도로 구성할 수 있다.
+Sync API는 다음으로 구성한다.
 
 ```text
 Vault
@@ -2119,6 +2123,13 @@ Realtime Hint
 WS   /api/v1/notifications
 
 
+File History
+
+GET  /api/v1/history
+
+GET  /api/v1/history/content
+
+
 Operations
 
 GET  /health/live
@@ -2133,3 +2144,57 @@ GET  /health/ready
 > **Change Journal을 파일 버전 저장소로 만들지 않고, ordered change metadata와 조건부 current-content download를 조합하여 Client가 항상 현재 Authoritative State로 수렴하게 하는 것**
 
 이다.
+
+---
+
+# 74. File History
+
+File History API는 사용자가 파일 하나를 과거 버전으로 되돌릴 때 사용하는 읽기 전용 API다. 기존 access profile의 인증을 그대로 따른다. 되돌리기 자체는 기존 Mutation API로 제출한다.
+
+## 74.1 파일 기록 조회
+
+```text
+GET /api/v1/history?path=notes/a.md&before=1300&limit=50
+```
+
+해당 경로에 영향을 준 Change를 최신순으로 반환한다. `before`를 주면 그 Revision보다 이전 항목부터 반환한다.
+
+```json
+{
+  "path": "notes/a.md",
+  "entries": [
+    {
+      "revision": 1250,
+      "type": "MODIFY",
+      "committedAt": "2026-09-28T09:10:00Z",
+      "actor": { "type": "CLIENT", "clientId": "C-2" },
+      "state": "PRESENT",
+      "contentHash": "sha256:...",
+      "size": 4812,
+      "contentAvailable": true
+    }
+  ],
+  "hasMore": true
+}
+```
+
+RENAME과 MOVE로 들어온 경로는 해당 항목에 `previousPath`를 붙이고, 이전 경로의 기록은 이어서 보여 주지 않는다.
+
+## 74.2 과거 내용 읽기
+
+```text
+GET /api/v1/history/content?contentHash=sha256:...
+```
+
+Content History 또는 현재 Vault에서 내용을 찾아 반환한다. 반환 전에 Hash를 검증한다. 내용이 없으면 `404 CONTENT_NOT_RETAINED`를 반환한다.
+
+## 74.3 되돌리기 Operation
+
+Client는 받은 내용의 Hash를 검증한 뒤 다음 Operation을 제출한다.
+
+| 현재 상태 | 되돌릴 버전 | Operation |
+| --- | --- | --- |
+| PRESENT | PRESENT (hash Y) | MODIFY, base = 현재 Revision과 Hash, content = Y |
+| DELETED | PRESENT (hash Y) | 32절의 Explicit Restore CREATE, content = Y |
+
+현재 내용과 같은 버전으로 되돌리는 요청은 만들지 않는다. 그 사이 다른 장치가 파일을 바꿨다면 일반 `BASE_STATE_MISMATCH`가 되고 Client는 이를 Conflict로 다룬다.

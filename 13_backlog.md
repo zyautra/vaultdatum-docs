@@ -13,6 +13,8 @@
 
 ## 2. 동기화 모델
 
+- **폴더·Vault 되돌리기**: 폴더나 Vault 전체를 특정 시점의 상태로 되돌린다. 현재는 단일 파일만 되돌릴 수 있다. 시점 지정 Manifest와, 원자적 적용을 위한 여러 파일의 논리적 변경 단위가 함께 필요하다.
+
 - **여러 파일의 논리적 변경 단위**: 관련된 여러 파일 변경을 하나의 Transaction으로 commit한다. 하나의 Operation이 여러 Change를 만들 수 있도록 [06 Data Model](./06_data-model.md)의 Operation–Change 관계를 확장해야 한다.
 - **Client 진행 상황 Acknowledgement API**: Server가 Client cursor를 관찰해 Change Journal, Tombstone, Operation Record의 GC 시점을 정한다.
 

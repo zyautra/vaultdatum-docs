@@ -1163,7 +1163,7 @@ actorType = SERVER_EXTERNAL
 
 # 20. 모든 Change는 Sync API Operation에서 나온다
 
-Committed Change는 Sync API로 제출되어 Mutation Engine을 통과한 Operation의 결과이다. 유일한 예외는 빈 Journal에 대한 Initial Vault Import이며, 이 Change도 서버가 생성한 Operation ID를 가진다.
+Committed Change는 Sync API로 제출되어 Mutation Engine을 통과한 Operation의 결과이다. 파일 되돌리기도 과거 내용을 담은 새 MODIFY 또는 CREATE Operation이며, Change Journal을 과거로 되감지 않는다. 유일한 예외는 빈 Journal에 대한 Initial Vault Import이며, 이 Change도 서버가 생성한 Operation ID를 가진다.
 
 ```text
 Sync API Operation
@@ -2341,7 +2341,31 @@ Resolved Conflict의 Metadata는 History로 유지할 수 있다.
 
 ## 48.7 Server Staging / Recovery Artifact
 
-Operation이 COMMITTED되고 더 이상 Crash Recovery에 필요하지 않으면 Garbage Collection할 수 있다.
+Operation이 COMMITTED되고 더 이상 Crash Recovery에 필요하지 않으면 Staging artifact는 Garbage Collection할 수 있다. MODIFY와 DELETE의 Recovery artifact는 지우지 않고 Content History로 옮긴다.
+
+## 48.8 Content History
+
+Content History는 과거 파일 내용을 Content Hash 단위로 보관한다.
+
+```text
+History Object
+
+contentHash
+size
+storedAt
+```
+
+어떤 Revision이 어떤 내용을 가졌는지는 Change Effect에 이미 있으므로 따로 기록하지 않는다. 특정 Revision의 내용을 읽을 수 있는지는 다음 중 하나로 판단한다.
+
+```text
+현재 Vault 파일이 그 Content Hash를 가진다
+
+History Object에 그 Content Hash가 있다
+```
+
+History Object는 보존 기간이 지나면 GC한다. GC는 내용만 지우고 Change Journal과 Change Effect는 지우지 않는다. 내용이 없는 Revision은 파일 기록에 남되 되돌리기 대상이 아니다.
+
+Content History를 도입하기 전에 대체되거나 삭제된 내용은 보관되어 있지 않다.
 
 ---
 

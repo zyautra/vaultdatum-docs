@@ -822,7 +822,23 @@ OP-123
 old A.md
 ```
 
-Operation이 완전히 COMMITTED된 후 더 이상 필요하지 않으면 GC한다.
+Operation이 완전히 COMMITTED되면 MODIFY와 DELETE의 recovery artifact는 Content History로 옮긴다.
+
+## 26.1 Content History Store
+
+```text
+/data/history/objects/sha256/<hash 앞 2자리>/<나머지 hash>
+```
+
+* 파일 이름이 Content Hash이므로 같은 내용은 한 번만 저장한다. 같은 Hash가 이미 있으면 recovery artifact만 지운다.
+* 이동은 같은 filesystem 안의 atomic rename이다.
+* 저장된 객체는 수정하지 않는다.
+* 보관한 객체는 SQLite `history_object(content_hash, size, stored_at)`에 기록한다.
+* Server Startup Recovery는 COMMITTED Operation에 남은 recovery artifact를 Hash 검증 후 옮긴다. Hash가 맞지 않으면 옮기지 않고 진단 로그를 남긴다.
+
+## 26.2 Content History GC
+
+`stored_at`이 보존 기간(`VAULTDATUM_HISTORY_RETENTION_DAYS`, 기본 90일)보다 오래된 객체를 지운다. 객체 파일을 먼저 지우고 `history_object` 행을 지운다. 중간에 멈추면 다음 GC가 행이 가리키는 파일이 없는 경우를 정리한다. 읽기 요청은 파일이 없으면 `CONTENT_NOT_RETAINED`를 반환한다.
 
 ---
 
@@ -1639,7 +1655,7 @@ Expired Manifest
 
 Committed Staging Artifact
 
-Committed Recovery Artifact
+보존 기간이 지난 Content History Object
 ```
 
 다음은 aggressive GC하지 않는다.

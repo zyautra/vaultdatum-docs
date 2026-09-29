@@ -1078,6 +1078,16 @@ Conflict와 Pending이 없으면 결국 Client는 Server State로 수렴한다.
 21. Vault Drift Rejects Mutation Before PREPARED
 
 22. Initial Vault Import Is All-or-Nothing
+
+23. MODIFY와 DELETE의 이전 내용이 Content History에 보관되고, commit 후 보관 전 Crash에서도 재시작 후 보관된다
+
+24. 파일을 과거 Revision으로 되돌리면 새 Revision이 생기고 다른 Client가 수렴한다
+
+25. 삭제된 파일을 되살리면 Explicit Restore CREATE로 복원된다
+
+26. 되돌리기 중 다른 장치가 같은 파일을 바꾸면 Conflict가 되고 양쪽 내용이 보존된다
+
+27. 보존 기간이 지난 버전은 기록에 남지만 되돌릴 수 없다
 ```
 
 이 Scenario들이 실제 Component를 사용해 안정적으로 반복 실행되면 Sync Correctness는 충분히 검증된 것으로 본다.

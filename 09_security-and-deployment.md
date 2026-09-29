@@ -340,6 +340,8 @@ resolve(VaultRoot, SyncPath)
 
 Client가 전달한 문자열을 그대로 Filesystem Path에 연결하지 않는다.
 
+File History API는 Content Hash로 Content History와 현재 Vault 파일만 읽는다. 임의 경로의 파일을 읽을 수 없다.
+
 ---
 
 # 13. Symbolic Link

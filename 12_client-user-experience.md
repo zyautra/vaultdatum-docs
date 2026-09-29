@@ -111,7 +111,8 @@ Client는 하나의 **VaultDatum Sync Overview**를 동기화 정보의 기준 �
 | ------------------ | ----------------------------------------------------- | --------------- |
 | Desktop Status Bar | 현재 상태를 한눈에 보이고 Overview 열기               | Desktop         |
 | VaultDatum 설정    | 연결 설정과 Overview의 항상 사용 가능한 진입점        | Desktop, Mobile |
-| Command Palette    | `Sync now`, `Open sync overview`, `Resolve conflicts` | Desktop, Mobile |
+| Command Palette    | `Sync now`, `Open sync overview`, `Resolve conflicts`, `Show file history`, `Restore deleted file` | Desktop, Mobile |
+| 파일 메뉴          | `File history`                                        | Desktop, Mobile |
 | 주의 알림          | 새 conflict 또는 지속 오류에서 해당 Overview 열기     | Desktop, Mobile |
 
 Status Bar를 클릭했다고 새 동기화를 무조건 시작하지 않는다. 사용자는 먼저
@@ -469,6 +470,69 @@ Pending이면 대기 수와 이유를 보인다.
 
 서버 revision이나 cursor는 기본 화면의 성공 여부를 판단하는 값으로 쓰지
 않는다. 필요할 때 진단 영역에서만 제공한다.
+
+### 7.4 파일 기록과 되돌리기
+
+사용자는 파일 하나를 과거 버전으로 되돌릴 수 있다. 직전 버전만이 아니라
+내용이 남아 있는 모든 버전을 바로 고를 수 있다. 폴더나 Vault 전체를 한 번에
+되돌리는 기능은 없다.
+
+`File history`는 파일 메뉴 또는 Command Palette에서 연다. 이력은 Server에서
+읽으므로 Offline에서는 `File history is available when VaultDatum is
+connected.`를 보여 주고 오류로 표시하지 않는다.
+
+```text
+File history
+notes/meeting.md
+
+┌──────────────────────────────┬──────────────────────────────────┐
+│ ● Current version            │ Changes from current version     │
+│   Today 14:32 · This device  │                                  │
+│                              │ 12 - 현재에만 있는 줄            │
+│ ○ Today 09:10                │ 12 + 선택한 버전의 줄            │
+│   Edited · Another device    │ 13   공통 줄                     │
+│                              │                                  │
+│ ○ Yesterday 22:41            │                                  │
+│   Edited · This device       │                                  │
+│                              │                                  │
+│ ◌ Jun 30 11:20               │                                  │
+│   Content no longer kept     │                                  │
+└──────────────────────────────┴──────────────────────────────────┘
+
+[Close]                                  [Restore this version]
+```
+
+- 목록은 최신순이며 맨 위는 현재 버전이다. 각 항목은 시각, 변경 종류
+  (`Created`, `Edited`, `Deleted`, `Renamed from …`, `Imported`), 장치
+  (`This device`, `Another device`, `Server import`)를 보여 준다.
+- 내용이 없는 버전은 흐리게 표시하고 이유를 보여 준다. 예: `Content no longer
+  kept (older than 90 days).`, `Content was not kept before history was enabled.`
+- Markdown은 현재 버전과의 차이를 수동 병합 작업 공간과 같은 줄 단위 비교로
+  보여 준다. 이미지는 선택한 버전을 보여 주고, 그 외 파일은 종류와 크기만
+  보여 준다. 렌더링과 embed는 실행하지 않는다.
+
+`Restore this version`은 확인을 거친다.
+
+```text
+Restore this version?
+
+notes/meeting.md will be changed to the version from Today 09:10.
+The current version stays in File history, so you can restore it again.
+
+[Cancel]                                        [Restore]
+```
+
+`Restore deleted file`은 삭제된 파일 목록을 열고, 선택한 파일의 기록에서 삭제
+직전 버전을 골라 둔다. 같은 경로에 이미 파일이 있으면 복원 Action을
+비활성화하고 이유를 보여 준다.
+
+되돌리기는 Server에 commit된 뒤에만 완료로 표시하고, 그 전에는 해당 파일을
+`Restoring…`으로 표시한다. 같은 파일에 Pending 변경이나 conflict가 있으면
+`Restore this version`을 비활성화하고 `Sync this file first.`를 보여 준다.
+되돌리는 동안 다른 장치가 같은 파일을 바꾸면 일반 conflict로 나타난다.
+
+Mobile에서는 버전 목록을 전체 화면으로 보이고, 버전을 탭하면 미리보기로
+이동한다. `Restore this version`은 하단 고정 Action bar에 둔다.
 
 ---
 
@@ -882,6 +946,8 @@ Conflict Center 진입과 새로운 conflict 알림
 
 redacted Copy diagnostic details
 
+단일 파일의 기록 조회, 과거 버전 되돌리기, 삭제된 파일 복원
+
 색에만 의존하지 않는 Desktop/Mobile 접근성
 ```
 
@@ -922,6 +988,10 @@ mobile의 항상 실행되는 background sync
 | Pending 또는 conflict가 없는 state reset      | Local/Server 파일을 삭제하지 않고 Server-first Bootstrap으로 재시작함       |
 | Pending 또는 conflict가 있는 state reset 시도 | 위험 설명과 review 경로를 제공하고 일반 reset을 실행하지 않음               |
 | diagnostic 복사                               | note content, Vault access token, authorization header가 포함되지 않음     |
+| 파일의 3일 전 버전으로 되돌리기 | 차이를 확인한 뒤 되돌리면 새 버전이 목록 맨 위에 생기고 이전 현재 버전도 남음 |
+| 삭제된 파일 복원 | 삭제된 파일 목록에서 골라 원래 경로로 복원됨 |
+| 보존 기간이 지난 버전 선택 | 이유가 보이고 되돌리기 Action이 비활성임 |
+| Offline에서 파일 기록 열기 | 오류가 아니라 연결 후 사용할 수 있다는 안내가 보임 |
 
 이 시나리오는 [10 Testing Strategy](./10_testing-strategy.md)의 Client integration 및
 E2E test에 반영한다. UI 문구만 확인하는 test에 그치지 않고, 각 화면 상태가

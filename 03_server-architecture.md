@@ -1161,11 +1161,32 @@ Manifest는 주로 다음 용도로 사용한다.
 
 ---
 
-## 29. Retention 경계
+## 29. Retention 경계와 Content History
 
 Change Journal, Tombstone, completed operation, recovery artifact의 retention과 GC 기준은 [06 Data Model](./06_data-model.md) 및 [08 Persistence Design](./08_persistence-design.md)을 단일 기준으로 사용한다.
 
 Server Architecture가 요구하는 결과는 하나다. incremental history를 사용할 수 없게 된 Client는 안전한 Full Reconciliation 또는 bootstrap으로 전환해야 하며, retention 때문에 오래된 파일을 새 CREATE로 오인해서는 안 된다.
+
+### 29.1 Content History
+
+Server는 MODIFY와 DELETE로 대체되거나 삭제된 파일의 이전 내용을 Content History로 보관한다. 사용자가 파일 하나를 과거 버전으로 되돌릴 수 있게 하기 위해서다.
+
+```text
+MODIFY / DELETE의 이전 내용
+      │
+      ▼
+recovery artifact (commit 전까지 복구용)
+      │ commit 완료
+      ▼
+Content History로 이동
+```
+
+* Content History는 동기화 correctness에 필요하지 않다. 보관 실패가 commit을 되돌리거나 Client 응답을 실패로 만들어서는 안 된다.
+* commit 뒤 이동 전에 Process가 종료되면 Server Startup Recovery가 남은 recovery artifact를 Content History로 옮긴다. 옮기기 전에 Hash를 검증한다.
+* Content History는 Vault 밖에 있으므로 동기화 대상도 Integrity Scan 대상도 아니다.
+* Server는 이력을 읽는 API만 제공한다. 되돌리기는 Client가 기존 MODIFY 또는 CREATE Operation으로 제출하며, 이는 26절의 쓰기 경계를 그대로 따른다.
+
+저장 형식과 GC는 [08 Persistence Design](./08_persistence-design.md), 읽기 API는 [07 API Specification](./07_api-specification.md)을 따른다.
 
 ---
 
@@ -1192,7 +1213,8 @@ Server의 persistent data는 모두 Data Root 아래에 위치한다.
 ├── state/
 │   └── sync.db
 ├── staging/
-└── recovery/
+├── recovery/
+└── history/
 ```
 
 Container Image는 실행 코드와 기본 설정만 포함하며 persistent state를 포함하지 않는다.
@@ -1209,7 +1231,7 @@ Container
 
 ### 30.1 하나의 Persistent Filesystem
 
-`vault`, `state`, `staging`, `recovery`는 기본적으로 하나의 persistent filesystem 아래에 배치한다.
+`vault`, `state`, `staging`, `recovery`, `history`는 기본적으로 하나의 persistent filesystem 아래에 배치한다. recovery artifact를 Content History로 atomic rename하기 때문이다.
 
 ```text
               Persistent Filesystem

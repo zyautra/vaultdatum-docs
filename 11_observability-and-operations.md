@@ -815,6 +815,8 @@ Backup은 Sync System과 별도 기능이다.
 
 이다.
 
+`/data/history`는 파일 되돌리기에만 쓰이므로 백업 포함 여부를 운영자가 선택한다. 포함하지 않아도 동기화 correctness에는 영향이 없다.
+
 ---
 
 # 33. Backup 주기
@@ -866,10 +868,14 @@ Staging
 
 Recovery
 
+Content History
+
 Manifest
 
 Client Conflict Artifact
 ```
+
+Content History 보존 기간은 `VAULTDATUM_HISTORY_RETENTION_DAYS`(기본 90일)로 정한다. 사용자가 삭제한 내용도 이 기간 동안 Server에 남는다. 민감한 내용을 즉시 지워야 하면 Server를 멈춘 뒤 해당 Content Hash의 객체와 `history_object` 행을 지운다.
 
 개인용 Vault에서는 상세 Metric보다 Disk가 가득 차는 상황만 피하면 충분하다.
 
