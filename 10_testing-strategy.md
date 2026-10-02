@@ -1088,6 +1088,8 @@ Conflict와 Pending이 없으면 결국 Client는 Server State로 수렴한다.
 26. 되돌리기 중 다른 장치가 같은 파일을 바꾸면 Conflict가 되고 양쪽 내용이 보존된다
 
 27. 보존 기간이 지난 버전은 기록에 남지만 되돌릴 수 없다
+
+28. 마지막 파일을 삭제하거나 옮기면 빈 Implicit Parent가 제거되고, 같은 경로의 Directory CREATE가 성공한다
 ```
 
 이 Scenario들이 실제 Component를 사용해 안정적으로 반복 실행되면 Sync Correctness는 충분히 검증된 것으로 본다.

@@ -1098,6 +1098,8 @@ Sync Path 규칙을 위반하는 경로
 
 Integrity Scan은 실제 Vault Filesystem과 File Index를 비교하여 Drift를 **감지하고 보고만** 한다. Journal, File Index, Vault Filesystem을 변경하지 않는다.
 
+Server Startup에서는 빈 Implicit Parent 정리([06 Data Model](./06_data-model.md) 9.1절)를 마친 뒤 Integrity Scan을 실행한다. 따라서 삭제나 이동 뒤 남은 빈 부모 디렉터리는 Drift로 보고되지 않는다.
+
 다음 시점에 수행할 수 있다.
 
 ```text

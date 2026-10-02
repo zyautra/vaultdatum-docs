@@ -34,7 +34,6 @@
 
 - **Online Consistent Backup**: Server를 멈추지 않고 Vault와 Sync State를 같은 시점으로 백업한다.
 - **운영자 요청과 주기 Integrity Scan**: 현재 Integrity Scan은 Server 시작 시에만 실행한다. API에 노출하지 않는 운영자 전용 실행 경로와 선택적 주기 실행을 검토한다.
-- **삭제 후 남은 빈 디렉터리의 Drift 오탐**: 파일 DELETE, RENAME, MOVE 뒤 비게 된 부모 디렉터리가 Integrity Scan에서 `UNKNOWN_ENTRY`로 보고된다. 해당 디렉터리를 정리하거나, 삭제 기록이 있는 경로의 빈 부모를 Drift로 보지 않는 규칙이 필요하다.
 
 ## 6. 테스트
 

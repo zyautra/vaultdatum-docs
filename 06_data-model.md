@@ -614,6 +614,20 @@ size
 
 Directory 상태를 추적하면 Empty Directory도 동기화할 수 있다.
 
+## 9.1 Implicit Parent Directory
+
+Path State에 Directory로 기록되지 않은 디렉터리는 하위 항목 때문에만 존재하는 **Implicit Parent**다. Implicit Parent는 동기화 항목이 아니다.
+
+Server는 파일 DELETE, RENAME/MOVE의 Source, Directory DELETE와 Directory 경로 변경의 Source를 commit한 뒤, 비게 된 Implicit Parent를 상위로 올라가며 제거한다.
+
+* Path State에 `PRESENT` Directory로 기록된 디렉터리는 비어 있어도 제거하지 않는다.
+* 숨김 파일을 포함해 무엇이든 들어 있는 디렉터리는 제거하지 않는다.
+* 제거는 동기화 correctness에 필요하지 않다. 제거 실패가 commit을 실패로 만들지 않는다.
+
+이렇게 하면 비어 있는 Implicit Parent가 남아 같은 경로의 Directory CREATE가 "이미 존재"로 거부되는 일이 없다.
+
+Server Startup은 이전 버전이 남긴 빈 Implicit Parent도 제거한다. 단, 하위에 `DELETED` Path State가 있어 Server가 남긴 것이 확인되는 디렉터리만 제거한다. 그 밖의 기록되지 않은 빈 디렉터리는 [03 Server Architecture](./03_server-architecture.md)의 Drift로 보고한다.
+
 ---
 
 # 10. Change Record
