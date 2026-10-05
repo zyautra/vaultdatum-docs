@@ -442,6 +442,7 @@ Overview의 주 Action은 현재 상태에 따라 하나만 우선 표시한다.
 | 상태 | 주 Action |
 | --- | --- |
 | Setup required 또는 Vault mismatch | `Connect server` 또는 `Review connection` |
+| Server restored | `Reconnect to restored Vault` |
 | First sync 또는 Syncing | `Syncing…` (비활성화) |
 | Paused | `Resume sync` |
 | Offline 또는 retryable error | `Retry now` |
@@ -566,6 +567,7 @@ VPN이 사용되는 설치에서는 VPN 연결을 확인하라는 추천 Action�
 | 인증 필요            | `이 Vault access token을 입력하세요`                  | `Enter access token`         |
 | 인증 거부 또는 token 교체 | `이 Vault access token을 업데이트하세요`             | `Update access token`        |
 | local recovery 문제  | `이 기기의 동기화 상태를 안전하게 확인할 수 없습니다` | `Open recovery`              |
+| Server 복원됨        | `서버 Vault가 Backup으로 복원되었습니다`              | `Reconnect to restored Vault` |
 
 raw error code와 stack trace는 기본 문구로 사용하지 않는다. 원문은 사용자가
 `Copy diagnostic details`를 선택했을 때에만 포함할 수 있다.
@@ -859,7 +861,31 @@ durable하게 보존하고, 사용자가 해당 backup 위치와 영향 범위�
 plugin을 제거하거나 Obsidian app data를 지우는 것은 모든 플랫폼에서 같은 결과를
 보장하지 않는다. 이는 일반 사용자용 reset 절차가 될 수 없다.
 
-### 10.4 Copy diagnostic details
+### 10.4 복원된 서버 Vault에 다시 연결
+
+서버가 Backup으로 복원되면 이 기기의 동기화는 멈추고 status bar는
+`VaultDatum: Server restored`를 보여 준다. 일반 Vault mismatch와 구분해, 다른
+서버로 바꾸라는 안내 대신 다시 연결을 주 Action으로 둔다.
+
+`Reconnect to restored server Vault`는 확인 화면을 거친다. 확인 화면은 다음을
+알린다.
+
+```text
+Local 파일은 바뀌지 않는다
+
+Backup 이후 만들거나 고친 파일은 다시 보내거나 Conflict로 남긴다
+
+Backup 이후 지운 파일은 서버에서 다시 내려온다
+
+보내지 못한 Rename은 이전 파일과 새 파일이 함께 남을 수 있다
+
+이전 Vault에 기록된 Pending과 Conflict 수
+```
+
+다시 연결한 뒤 일반 Initial Bootstrap 진행 상태를 보여 준다. 이 Action은 서버가
+알려 준 이전 Vault ID가 이 기기의 Vault ID와 같을 때만 실행된다.
+
+### 10.5 Copy diagnostic details
 
 사용자가 지원 또는 self-diagnosis를 위해 복사할 수 있는 진단 정보는 다음을
 포함할 수 있다.

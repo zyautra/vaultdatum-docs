@@ -420,9 +420,12 @@ Response 예:
   "currentRevision": 1205,
   "oldestRetainedRevision": 1,
   "protocolVersion": 1,
-  "hashAlgorithm": "SHA-256"
+  "hashAlgorithm": "SHA-256",
+  "previousVaultIds": []
 }
 ```
+
+`previousVaultIds`는 이 Vault가 Backup으로 복원되기 전에 쓰던 Vault ID 목록이다. 오래된 것부터 나열하며, 복원한 적이 없으면 빈 배열이다.
 
 ---
 
@@ -445,6 +448,8 @@ Replica Index
 를 그대로 사용하지 않는다.
 
 Client는 Rebootstrap 또는 Recovery 절차로 전환한다.
+
+저장한 Vault ID가 `previousVaultIds`에 있으면 Server가 이 Client의 Vault를 Backup으로 복원한 것이다. Client는 사용자 확인 뒤 새 Vault ID로 다시 Binding하고 Initial Bootstrap을 수행한다([04 Client Architecture](./04_client-architecture.md) 49절). 그 외의 Vault ID 불일치에서는 동기화를 멈춘다.
 
 ---
 

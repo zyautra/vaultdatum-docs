@@ -1322,6 +1322,8 @@ serverCursor = 5000
 
 Vault ID가 바뀌면 Cursor만 유지해서는 안 된다.
 
+Server를 Backup으로 복원하면 Vault ID가 바뀐다. Server는 이전 Vault ID를 Previous Vault로 기록한다. 저장된 Vault ID가 Previous Vault에 있는 Client는 복원된 Vault에 다시 연결할 수 있지만, 이때도 기존 Cursor와 Replica Index는 버리고 Initial Bootstrap을 수행한다.
+
 ---
 
 ## 24.3 Initial Bootstrap State
@@ -2380,6 +2382,20 @@ History Object에 그 Content Hash가 있다
 History Object는 보존 기간이 지나면 GC한다. GC는 내용만 지우고 Change Journal과 Change Effect는 지우지 않는다. 내용이 없는 Revision은 파일 기록에 남되 되돌리기 대상이 아니다.
 
 Content History를 도입하기 전에 대체되거나 삭제된 내용은 보관되어 있지 않다.
+
+## 48.9 Previous Vault
+
+Backup으로 복원되기 전에 이 Vault가 쓰던 Vault ID를 기록한다.
+
+```text
+Previous Vault
+
+vaultId
+replacedAt
+restoredBackupCreatedAt
+```
+
+지우지 않는다. 복원을 여러 번 했다면 모두 남는다. `restoredBackupCreatedAt`은 같은 Backup으로 다시 복원하는 것을 막는 데 쓴다.
 
 ---
 

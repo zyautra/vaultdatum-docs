@@ -579,9 +579,8 @@ Application Version Update는 다음 순서로 수행한다.
 ```text
 Stop Server
 
-Backup 확인
-
 Start New Version
+  → 적용할 Schema Migration이 있으면 Migration 전에 Backup 갱신
 
 Schema Migration
 
@@ -589,6 +588,8 @@ Recovery
 
 Readiness 확인
 ```
+
+Migration 전 Backup을 만들 수 없으면 Server는 Schema를 바꾸지 않고 시작을 거부한다.
 
 Container Image 교체가 `/data` 삭제를 의미해서는 안 된다.
 
@@ -693,7 +694,7 @@ Drift는 새 Server Change로 편입하지 않는다. Drift가 있는 경로를 
 
 해소한 뒤 Integrity Scan을 다시 실행하여 Drift가 없는지 확인한다.
 
-Backup 복원은 34절에 따라 Vault와 Sync State를 같은 시점의 Snapshot으로 함께 복원한다. Vault만 따로 복원하면 Drift가 생긴다.
+Backup 복원은 33절을 따른다. Vault 디렉터리만 따로 되돌리면 Drift가 생긴다.
 
 ---
 
@@ -803,55 +804,66 @@ Readiness = false
 
 # 32. Backup
 
-Backup은 Sync System과 별도 기능이다.
+Server는 마지막 정상 상태의 Backup 하나를 `/data/backups/current/`에 유지한다. 구성과 정상 상태 확인 규칙은 [03 Server Architecture](./03_server-architecture.md) 33절을 따른다. 사용자가 잘못 바꾼 파일은 Content History로 되돌리고, Backup은 Vault나 Sync State 자체가 망가졌을 때 쓴다.
 
-최소 Backup 대상:
+| 환경 변수                          | 기본값  | 의미                                                                     |
+| ---------------------------------- | ------- | ------------------------------------------------------------------------ |
+| `VAULTDATUM_BACKUP_INTERVAL_HOURS` | `24`    | 주기 갱신 간격. `0`이면 주기 갱신을 끈다. Migration 전 갱신은 끌 수 없다 |
+| `VAULTDATUM_RESTORE_BACKUP`        | `false` | 시작할 때 `current`로 복원한다                                           |
+
+로그:
 
 ```text
-/data/vault
-
-/data/state
+backup_complete   trigger revision files bytes durationMs lockMs
+backup_skipped    trigger reason
+backup_failed     trigger cause
+restore_complete  previousVaultId vaultId revision
+restore_rejected  reason
 ```
 
-이다.
+경로, 개수, Revision, 시간만 기록하고 Content는 기록하지 않는다.
 
-`/data/history`는 파일 되돌리기에만 쓰이므로 백업 포함 여부를 운영자가 선택한다. 포함하지 않아도 동기화 correctness에는 영향이 없다.
+`backup_skipped`가 이어지면 Backup이 오래된 상태로 남는다. `reason`이 `vault-entry-missing`이나 `vault-entry-mismatch`이면 Vault에 Drift가 있다는 뜻이므로 26절에 따라 해소한다. 상태를 점검할 때 `current/backup.json`의 `createdAt`과 `revision`을 함께 확인한다.
+
+## 32.1 Server 밖 사본
+
+Backup은 Server와 같은 디스크에 있으므로 디스크 손실에는 대비하지 못한다. 대비하려면 `current/`를 다른 장치로 복사한다. 완성된 `current/`는 바뀌지 않지만 갱신 때 디렉터리가 통째로 교체되므로, 복사 전후로 `backup.json`의 `createdAt`이 같은지 확인한다.
+
+```bash
+rsync -aH /data/backups/current/ backup-host:/vaultdatum/current/
+```
+
+Server 밖 사본은 Vault와 같은 수준으로 보호한다. 사용자가 지운 내용과 Content History도 들어 있다.
 
 ---
 
-# 33. Backup 주기
-
-개인 시스템에서는 복잡한 정책을 강제하지 않는다.
-
-예:
+# 33. Backup 복원
 
 ```text
-Daily
+1. Server를 멈춘다
 
-Weekly
+2. (Server 밖 사본에서 가져오는 경우) /data/backups/current/ 에 둔다
+
+3. VAULTDATUM_RESTORE_BACKUP=true 로 Server를 시작한다
+
+4. 로그의 restore_complete와 /api/v1/vault 로
+   새 vaultId, Revision, previousVaultIds를 확인하고
+   Integrity Scan 결과가 drifts=0인지 확인한다
+
+5. 플래그를 끄고 Server를 다시 시작한다
+
+6. 각 장치에서 "Reconnect to restored server Vault"를 실행한다
 ```
 
-등 사용자가 원하는 방식으로 운영할 수 있다.
+Server는 복원 직전 상태를 `/data/backups/pre-restore-<time>/`에 옮겨 둔다. 자동으로 지우지 않으므로 확인이 끝나면 운영자가 지운다. Backup이 손상되었거나 이미 그 Backup으로 복원한 상태면 아무것도 바꾸지 않고 시작을 거부한다. Backup보다 오래된 Server 버전으로는 복원하지 않는다.
 
-중요한 것은 Sync가 Backup을 대체하지 않는다는 점이다.
+복원하면 Backup 이후 Server에 기록된 변경은 Server에서 사라진다. 장치에 남아 있는 내용은 다시 연결할 때 Pending 또는 Conflict로 되살아나고, Backup 이후의 삭제는 되돌아간다([04 Client Architecture](./04_client-architecture.md) 49절).
 
 ---
 
-# 34. Backup Consistency
+# 34. Backup과 민감한 내용
 
-실행 중 Backup을 수행한다면 Vault와 SQLite가 서로 다른 시점의 상태가 될 수 있음을 고려해야 한다.
-
-가장 단순한 안전한 방법은:
-
-```text
-Server Stop
-
-Backup
-
-Server Start
-```
-
-이다.
+Backup에는 사용자가 지운 내용이 최대 한 갱신 간격 동안 남는다. 민감한 내용을 즉시 지워야 하면 Server를 멈춘 뒤 35절의 Content History 객체와 함께 `current/vault`의 해당 파일과 Server 밖 사본도 지운다. `current/state/sync.db`에도 경로와 Hash가 남는다.
 
 ---
 
@@ -870,10 +882,14 @@ Recovery
 
 Content History
 
+Backup
+
 Manifest
 
 Client Conflict Artifact
 ```
+
+Backup은 hard link로 만들므로 추가로 쓰는 공간은 마지막 Backup 이후 바뀌거나 지워진 파일, 그리고 `sync.db` 크기 정도다.
 
 Content History 보존 기간은 `VAULTDATUM_HISTORY_RETENTION_DAYS`(기본 90일)로 정한다. 사용자가 삭제한 내용도 이 기간 동안 Server에 남는다. 민감한 내용을 즉시 지워야 하면 Server를 멈춘 뒤 해당 Content Hash의 객체와 `history_object` 행을 지운다.
 

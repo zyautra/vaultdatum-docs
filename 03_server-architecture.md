@@ -1006,7 +1006,7 @@ Administrator Manual Edit
 
 직접 수정은 Base Revision 검증, Conflict 감지, Change Journal 기록, Idempotency를 모두 우회한다. 서버가 직접 수정을 새 변경으로 편입하면 Client의 Pending 변경을 Conflict 없이 덮어쓸 수 있고, Volume 미마운트나 부분 복원이 대량 DELETE로 전파될 수 있다. 따라서 서버는 직접 수정을 Journal에 편입하지 않는다. 유일한 예외는 Journal이 비어 있는 새 Vault에 기존 자료를 한 번 들여오는 26.4 Initial Vault Import이다.
 
-운영자나 도구가 콘텐츠를 추가하거나 바꾸려면 Client처럼 Sync API의 Operation을 제출한다. Backup 복원은 Vault와 Sync State를 같은 시점의 Snapshot으로 함께 복원하는 운영 절차로만 수행한다. 절차는 [11 Observability and Operations](./11_observability-and-operations.md)을 따른다.
+운영자나 도구가 콘텐츠를 추가하거나 바꾸려면 Client처럼 Sync API의 Operation을 제출한다. Backup 복원은 Vault 내용을 Change로 편입하지 않는다. Data Root를 Backup으로 통째로 교체하는 시작 절차이며 33절을 따른다.
 
 ### 26.1 Vault Drift
 
@@ -1317,9 +1317,77 @@ Sync State durable
 
 ---
 
-## 33. Backup Consistency
+## 33. Server Backup
 
-Vault와 Sync State를 함께 보존해야 한다는 서버 요구사항만 이 문서에서 둔다. 백업 시점 일관성, 주기, 복구 절차는 [11 Observability and Operations](./11_observability-and-operations.md)을 단일 기준으로 사용한다.
+Server는 마지막 정상 상태의 Backup 하나를 `/data/backups/current/`에 유지한다. Backup은 Vault, Sync State, Content History의 일관된 한 시점이다. 사용자 실수는 Content History로 되돌리고, Backup은 버그나 저장소 문제로 Vault나 Sync State 자체가 망가졌을 때 쓰는 마지막 수단이다. 운영 절차와 설정은 [11 Observability and Operations](./11_observability-and-operations.md) 32–33절을 따른다.
+
+### 33.1 구성
+
+```text
+/data/backups/
+  current/              유일한 Backup
+    backup.json         vaultId, revision, createdAt, trigger, serverVersion,
+                        schemaVersion, files, bytes, syncDbHash
+    vault/  history/  recovery/  staging/
+    state/sync.db
+  .partial/             만드는 중. Backup으로 보지 않는다
+  pre-restore-<time>/   복원 직전 상태
+```
+
+Server는 Vault 파일, Content History 객체, Recovery Artifact, Staged File을 제자리에서 고쳐 쓰지 않는다. 모든 변경은 새 파일을 만들어 원자적으로 옮긴다. 따라서 Backup은 이 파일들을 복사하지 않고 hard link로 만든다. 이후 원래 경로가 바뀌거나 지워져도 Backup의 inode는 그대로이고, 바뀌지 않은 파일은 디스크를 추가로 쓰지 않는다. hard link를 만들 수 없는 Filesystem에서는 복사한다. `sync.db`는 제자리에서 바뀌므로 link하지 않고 SQLite `VACUUM INTO`로 일관된 사본을 만든다.
+
+일반 파일과 디렉터리가 아닌 항목은 원래 Drift이므로 건너뛰고 경로를 로그에 남긴다. Access Token은 Data Root 밖에 있으므로 Backup에 들어가지 않는다.
+
+### 33.2 갱신
+
+```text
+1. MutationLock을 잡는다 (읽기와 Pull은 계속된다)
+2. 정상 상태를 확인한다. 실패하면 기존 Backup을 유지하고 끝낸다
+3. .partial/ 에 VACUUM INTO로 sync.db를 만들고
+   vault, history, recovery, staging을 hard link로 복제한다
+4. MutationLock을 푼다
+5. 사본 DB를 열어 vaultId와 Revision이 같은지 확인하고 backup.json을 쓴다
+6. current/ 를 .old/ 로, .partial/ 을 current/ 로 옮긴 뒤 .old/ 를 지운다
+```
+
+1–4단계를 Lock 안에서 하므로 Backup의 Path State와 Vault 트리는 정확히 일치한다. 6단계 중 Server가 멈추면 다음 시작에서 `.old/`를 `current/`로 되돌리고 `.partial/`을 지운다.
+
+Backup이 하나뿐이므로 망가진 상태가 정상 Backup을 덮어쓰지 않도록, 기존 Backup이 있을 때는 대체하기 전에 다음을 확인한다. 기존 Backup이 없으면 지킬 것이 없으므로 이 검사 없이 만든다.
+
+| 검사 | 조건 | 막는 상황 |
+| --- | --- | --- |
+| Vault 일치 | `vaultId`가 Backup과 같거나, Backup의 vaultId가 이 Vault의 이전 ID다 | 다른 Vault의 DB로 덮어쓰기 |
+| Revision | 현재 Revision ≥ Backup의 Revision | 과거로 돌아간 DB로 덮어쓰기 |
+| 변경 여부 | vaultId와 Revision이 Backup과 같으면 건너뛴다 | 같은 상태의 불필요한 갱신 |
+| Vault 존재 | Path State에서 PRESENT인 모든 항목이 같은 타입으로 있고, 파일 크기가 기록과 같다 | 파일이 사라진 Vault로 덮어쓰기 |
+
+주기 갱신은 PREPARED Operation이 있으면 건너뛴다. Vault 존재 검사는 해시를 계산하지 않으므로 큰 Vault에서도 빠르다. 모든 검사는 처음 Schema부터 있던 열만 읽으므로 Migration 전에도 실행할 수 있다.
+
+갱신 시점:
+
+* **주기**: 마지막 Backup의 `createdAt`부터 설정한 간격이 지나면 갱신한다.
+* **Migration 직전**: 시작할 때 적용할 Migration이 있으면 Recovery와 Migration 전에 갱신한다. 이전 Server가 남긴 PREPARED Operation이 함께 들어갈 수 있으며, 복원한 뒤 시작하면 일반 Recovery가 처리한다. Backup을 만들 수 없으면 Schema를 바꾸지 않고 시작을 거부한다.
+
+주기 갱신의 실패나 건너뜀은 동기화 correctness에 영향을 주지 않는다. 경고를 남기고 다음 간격에 다시 시도한다.
+
+### 33.3 복원
+
+복원은 `VAULTDATUM_RESTORE_BACKUP=true`로 시작할 때만 하며, DB를 열기 전에 수행한다.
+
+```text
+1. backup.json, sync.db Hash, Vault 파일 수와 크기를 확인한다
+   → 맞지 않으면 아무것도 바꾸지 않고 시작을 거부한다
+2. 현재 vault, state, history, recovery, staging을
+   /data/backups/pre-restore-<time>/ 로 옮긴다 (지우지 않는다)
+3. Backup을 Data Root에 hard link로 복제하고 sync.db는 복사한다
+4. DB를 열고 필요한 Migration을 적용한다
+5. 새 Vault ID를 발급하고 이전 Vault ID를 기록한다. Manifest를 비운다
+6. 일반 시작 절차를 계속한다
+```
+
+2–3단계가 실패하면 옮긴 상태를 되돌리고 시작을 거부한다. 복원해도 Backup 자체는 바뀌지 않는다. 마지막으로 복원한 Backup과 같은 Backup으로 다시 복원하라는 요청은 거부한다. 플래그를 끄지 않고 재시작해 복원 뒤의 변경을 덮어쓰는 일을 막기 위해서다.
+
+복원하면 Revision은 Backup 시점으로 돌아가지만 장치는 그 뒤 Revision까지 받았을 수 있다. Vault ID가 그대로이면 장치의 Cursor가 Server보다 앞서거나, 복원 뒤 다시 쓰인 Revision 번호를 장치가 이미 받은 것으로 보고 건너뛴다. 새 Vault ID를 발급하면 [06 Data Model](./06_data-model.md) Invariant 15에 따라 기존 Cursor와 Replica Index를 쓰지 않게 된다. 이전 Vault ID는 `GET /api/v1/vault`의 `previousVaultIds`로 알려 장치가 복원을 알아보고 다시 연결하게 한다([04 Client Architecture](./04_client-architecture.md) 49절).
 
 ---
 

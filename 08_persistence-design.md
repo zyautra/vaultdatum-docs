@@ -842,6 +842,17 @@ Operation이 완전히 COMMITTED되면 MODIFY와 DELETE의 recovery artifact는 
 
 ---
 
+## 26.3 Server Backup Store
+
+Server Backup은 `/data/backups/current/` 하나다. 구성과 갱신, 복원 절차는 [03 Server Architecture](./03_server-architecture.md) 33절을 단일 기준으로 사용한다.
+
+* Vault 파일, History 객체, Recovery Artifact, Staged File은 hard link로 담는다. 이 파일들을 제자리에서 고쳐 쓰지 않는다는 규칙이 hard link Backup의 전제다.
+* `sync.db`는 `VACUUM INTO`로 만든 독립된 사본이다. Backup의 `sync.db`를 hard link로 Data Root에 되돌리지 않는다.
+* `backup.json`에는 `syncDbHash`와 Vault 파일 수·크기를 기록해 복원 전에 검증한다.
+* 이전 Vault ID는 SQLite `previous_vault(vault_id, replaced_at, restored_backup_created_at)`에 기록한다.
+
+---
+
 # 27. Orphan Artifact Recovery
 
 Server Startup 시:
@@ -899,7 +910,7 @@ sync.db
 
 파일 하나만 단순 복사하여 완전한 Backup이라고 간주하지 않는다.
 
-Backup은 SQLite가 보장하는 일관된 Snapshot 방식 또는 Server가 정지된 상태에서 수행해야 한다.
+Server Backup은 SQLite `VACUUM INTO`로 일관된 단일 파일을 만든다([03 Server Architecture](./03_server-architecture.md) 33절).
 
 ---
 
@@ -1674,7 +1685,7 @@ Client Replica Tombstone
 
 # 58. Persistence Backup Boundary
 
-Server Backup은 최소:
+Server Backup은:
 
 ```text
 Vault Filesystem
@@ -1682,9 +1693,13 @@ Vault Filesystem
 +
 
 SQLite Sync Store
+
++
+
+Content History
 ```
 
-를 하나의 논리적 단위로 취급한다.
+를 같은 시점의 하나의 논리적 단위로 취급한다. Server는 이 단위를 26.3절의 Backup Store로 유지한다.
 
 Client Sync Store는 중요한 Recovery Metadata를 가지고 있지만 사용자의 주 Content Backup을 대체하지 않는다.
 

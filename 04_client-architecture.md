@@ -1465,3 +1465,33 @@ Server State
 
 삭제된 경로를 되살릴 때 로컬에 같은 경로의 파일이 이미 있으면 되돌리기를 시작하지 않는다.
 
+## 49. 복원된 서버 Vault에 다시 연결
+
+서버가 Backup으로 복원되면 새 Vault ID를 받는다([03 Server Architecture](./03_server-architecture.md) 33.3절). Client는 저장된 Vault ID가 서버와 다를 때 다음처럼 구분한다.
+
+| 조건 | 동작 |
+| --- | --- |
+| 저장된 Vault ID가 서버의 `previousVaultIds`에 있다 | Restored Vault. 동기화를 멈추고 다시 연결을 안내한다 |
+| 그 외 | Vault Mismatch. 동기화를 멈춘다 |
+
+어느 경우에도 Pending을 보내지 않는다. 사용자가 다시 연결을 확인하면 다음을 한다.
+
+```text
+1. 중단된 Manual Merge를 Local 파일에 마저 쓰고,
+   Keep Both의 사본이 아직 Local에 없으면 사본 파일을 쓴다
+2. 한 Transaction으로 Cursor, Replica Index, Pending, Conflict,
+   진행 중 Apply와 Resolution 기록을 비우고 새 Vault ID로 Binding한다
+3. 다음 동기화에서 Initial Bootstrap을 수행한다
+```
+
+Local 파일은 바꾸지 않는다. Pending과 Conflict는 이전 Vault의 Revision을 Base로 하므로 그대로 쓸 수 없지만, 그 내용은 Local 파일에 있으므로 Initial Bootstrap이 다시 분류한다.
+
+| Local | Server (Backup 시점) | 결과 |
+| --- | --- | --- |
+| 같은 내용 | PRESENT | Replica |
+| 다른 내용 | PRESENT | Conflict. 어느 쪽도 덮어쓰지 않는다 |
+| 있음 | 기록 없음 (Backup 이후 만든 파일) | Pending CREATE |
+| 있음 | DELETED | Conflict |
+| 없음 | PRESENT (Backup 이후 지운 파일) | Server에서 내려받는다 |
+
+따라서 Backup 이후 이 장치에서 만들거나 고친 내용은 사라지지 않는다. Backup 이후의 삭제는 되돌아가고, 보내지 못한 Rename은 이전 경로와 새 경로의 파일이 함께 남을 수 있다.

@@ -32,7 +32,6 @@
 
 ## 5. 운영
 
-- **Online Consistent Backup**: Server를 멈추지 않고 Vault와 Sync State를 같은 시점으로 백업한다.
 - **운영자 요청과 주기 Integrity Scan**: 현재 Integrity Scan은 Server 시작 시에만 실행한다. API에 노출하지 않는 운영자 전용 실행 경로와 선택적 주기 실행을 검토한다.
 
 ## 6. 테스트

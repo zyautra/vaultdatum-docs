@@ -1090,6 +1090,18 @@ Conflict와 Pending이 없으면 결국 Client는 Server State로 수렴한다.
 27. 보존 기간이 지난 버전은 기록에 남지만 되돌릴 수 없다
 
 28. 마지막 파일을 삭제하거나 옮기면 빈 Implicit Parent가 제거되고, 같은 경로의 Directory CREATE가 성공한다
+
+29. Mutation 중에 만든 Backup의 Path State와 Vault 트리가 일치하고, 이후 수정·삭제에도 Backup 내용이 그대로다
+
+30. Vault 파일이 사라진 상태나 Revision이 뒤로 간 DB는 기존 Backup을 대체하지 못한다
+
+31. 적용할 Migration이 있으면 Migration 전 상태가 Backup된다
+
+32. Backup으로 복원하면 새 Vault ID와 Backup 시점 Revision으로 시작하고, Drift가 없으며, 복원 직전 상태가 보존된다
+
+33. 손상된 Backup이나 이미 복원한 Backup으로는 복원하지 않는다
+
+34. 복원 전 Vault의 장치는 다시 연결한 뒤 Backup 이후 만든 파일을 다시 보내고, 관계없는 Vault ID의 장치는 다시 연결할 수 없다
 ```
 
 이 Scenario들이 실제 Component를 사용해 안정적으로 반복 실행되면 Sync Correctness는 충분히 검증된 것으로 본다.
